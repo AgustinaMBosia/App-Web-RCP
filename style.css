@@ -80,14 +80,14 @@ canvas {
 
 #freqChart,
 #profChart {
-    width: 300px !important;
-    height: 150px !important;
+    width: 450px !important;
+    height: 225px !important;
 }
 
 #pieChart,
 #handPosChart {
-    width: 200px !important;
-    height: 200px !important;
+    width: 300px !important;
+    height: 300px !important;
 }
 
 .chart-container {
