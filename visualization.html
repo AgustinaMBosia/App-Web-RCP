@@ -10,8 +10,27 @@
 <body>
     <h1>Visualización en Tiempo Real</h1>
     <div id="output">
-        <p id="receivedData">Esperando datos...</p>
+    <p id="receivedData">Esperando datos...</p>
+
+    <div class="chart-container">
+        <div>
+            <canvas id="freqChart" width="300" height="150"></canvas>
+        </div>
+        <div>
+            <canvas id="profChart" width="300" height="150"></canvas>
+        </div>
+        <div>
+            <canvas id="pieChart" width="200" height="200"></canvas>
+        </div>
+        <div>
+            <canvas id="handPosChart" width="200" height="200"></canvas>
+        </div>
     </div>
+    <div id="receivedData"></div>
+    
+    
+</div>
+
     <script src="visualizacion.js"></script>
 </body>
 </html>
