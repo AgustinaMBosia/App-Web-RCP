@@ -84,7 +84,7 @@ document.getElementById('simulateButton').addEventListener('click', () => {
 
 function generateSimulatedData() {
     const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
-    const profundidad = Math.floor(Math.random() * 100);
+    const profundidad = Math.floor(Math.random() * 10);
     const freq = Math.floor(Math.random() * 200) + 50;
     return `\nU${handPosition},P${profundidad},F${freq}:`;
 }

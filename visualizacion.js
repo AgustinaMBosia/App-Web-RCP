@@ -8,6 +8,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let correctExecutions = 0;
     let incorrectExecutions = 0;
 
+    const freqIdealMin = 100;
+    const freqIdealMax = 120;
+    const profIdealMin = 5;
+    const profIdealMax = 6;
+
+    let globalCounter = 0;
+
     const freqData = {
         labels: [],
         datasets: [
@@ -17,13 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderColor: 'blue',
                 fill: false,
                 tension: 0.1,
-            },
-            {
-                label: 'Rango Ideal',
-                data: [],
-                backgroundColor: 'rgba(0, 255, 0, 0.2)',
-                borderWidth: 0,
-                type: 'bar',
             },
         ],
     };
@@ -36,17 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: [],
                 backgroundColor: 'rgba(255, 99, 132, 0.5)',
             },
-            {
-                label: 'Rango Ideal',
-                data: [],
-                backgroundColor: 'rgba(0, 255, 0, 0.2)',
-                borderWidth: 0,
-            },
         ],
     };
 
     const pieData = {
-        labels: ['Correcta', 'Incorrecta'],
+        labels: ['Ejecucion Correcta', 'E. Incorrecta'],
         datasets: [
             {
                 data: [0, 0],
@@ -56,13 +50,36 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handPosData = {
-        labels: ['OK', 'NOK'],
+        labels: ['Posicion de manos OK', 'No OK'],
         datasets: [
             {
                 data: [1, 0], // Por defecto: OK
                 backgroundColor: ['green', 'red'],
             },
         ],
+    };
+
+    // Plugin para sombrear el rango ideal
+    const rangePlugin = {
+        id: 'rangePlugin',
+        beforeDraw(chart) {
+            const ctx = chart.ctx;
+            const yScale = chart.scales.y;
+
+            if (chart.canvas.id === 'freqChart') {
+                const yMin = yScale.getPixelForValue(freqIdealMin);
+                const yMax = yScale.getPixelForValue(freqIdealMax);
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                ctx.fillRect(chart.chartArea.left, yMax, chart.chartArea.width, yMin - yMax);
+            }
+
+            if (chart.canvas.id === 'profChart') {
+                const yMin = yScale.getPixelForValue(profIdealMin);
+                const yMax = yScale.getPixelForValue(profIdealMax);
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                ctx.fillRect(chart.chartArea.left, yMax, chart.chartArea.width, yMin - yMax);
+            }
+        },
     };
 
     const freqChart = new Chart(freqCtx, {
@@ -76,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
             },
         },
+        plugins: [rangePlugin],
     });
 
     const profChart = new Chart(profCtx, {
@@ -89,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
             },
         },
+        plugins: [rangePlugin],
     });
 
     const pieChart = new Chart(pieCtx, {
@@ -101,84 +120,69 @@ document.addEventListener('DOMContentLoaded', () => {
         data: handPosData,
     });
 
-    let globalCounter = 0; // Contador global que no se reinicia
+    function updateVisualization(data) {
+        try {
+            const parsedData = JSON.parse(data);
 
-function updateVisualization(data) {
-    try {
-        const parsedData = JSON.parse(data);
+            // Datos actuales
+            const freq = parsedData.freq || 0;
+            const prof = parsedData.profundidad || 0;
+            const handPos = parsedData.handPosition || 'N/A';
 
-        // Datos actuales
-        const freq = parsedData.freq || 0;
-        const prof = parsedData.profundidad || 0;
-        const handPos = parsedData.handPosition || 'N/A';
+            // Incrementa el contador global
+            globalCounter++;
 
-        // Rango ideal
-        const freqIdealMin = 80;
-        const freqIdealMax = 120;
-        const profIdealMin = 30;
-        const profIdealMax = 50;
+            // Gestión de etiquetas para mostrar los últimos 7 datos
+            if (freqData.labels.length >= 7) {
+                freqData.labels.shift();
+                freqData.datasets[0].data.shift();
 
-        // Incrementa el contador global
-        globalCounter++;
+                profData.labels.shift();
+                profData.datasets[0].data.shift();
+            }
 
-        // Gestión de etiquetas para mostrar los últimos 7 datos
-        if (freqData.labels.length >= 7) {
-            // Mantén solo los últimos 7 datos
-            freqData.labels.shift();
-            freqData.datasets[0].data.shift();
-            freqData.datasets[1].data.shift();
+            // Agrega al gráfico la etiqueta del contador global
+            freqData.labels.push(globalCounter);
+            profData.labels.push(globalCounter);
 
-            profData.labels.shift();
-            profData.datasets[0].data.shift();
-            profData.datasets[1].data.shift();
+            // Agrega datos reales
+            freqData.datasets[0].data.push(freq);
+            profData.datasets[0].data.push(prof);
+
+            // Actualización de ejecución correcta/incorrecta
+            const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
+            const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
+            const isHandOK = handPos === 'OK';
+
+            if (isFreqCorrect && isProfCorrect && isHandOK) {
+                correctExecutions++;
+            } else {
+                incorrectExecutions++;
+            }
+
+            pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
+
+            // Actualización de posición de manos
+            handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
+
+            // Actualizar gráficos
+            freqChart.update();
+            profChart.update();
+            pieChart.update();
+            handPosChart.update();
+
+            // Mostrar datos recibidos
+            receivedDataElement.innerHTML = `
+                <strong>Datos Recibidos:</strong><br>
+                Posición de la Mano: ${handPos}<br>
+                Profundidad: ${prof}<br>
+                Frecuencia: ${freq}
+            `;
+        } catch (error) {
+            console.error('Error al procesar los datos:', error);
+            receivedDataElement.innerHTML = 'Error al mostrar los datos.';
         }
-
-        // Agrega al gráfico la etiqueta del contador global
-        freqData.labels.push(globalCounter);
-        profData.labels.push(globalCounter);
-
-        // Agrega datos reales
-        freqData.datasets[0].data.push(freq);
-        profData.datasets[0].data.push(prof);
-
-        // Agrega rango ideal
-        freqData.datasets[1].data.push((freqIdealMax + freqIdealMin) / 2);
-        profData.datasets[1].data.push((profIdealMax + profIdealMin) / 2);
-
-        // Actualización de ejecución correcta/incorrecta
-        const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
-        const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
-        const isHandOK = handPos === 'OK';
-
-        if (isFreqCorrect && isProfCorrect && isHandOK) {
-            correctExecutions++;
-        } else {
-            incorrectExecutions++;
-        }
-
-        pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
-
-        // Actualización de posición de manos
-        handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
-
-        // Actualizar gráficos
-        freqChart.update();
-        profChart.update();
-        pieChart.update();
-        handPosChart.update();
-
-        // Mostrar datos recibidos
-        receivedDataElement.innerHTML = `
-            <strong>Datos Recibidos:</strong><br>
-            Posición de la Mano: ${handPos}<br>
-            Profundidad: ${prof}<br>
-            Frecuencia: ${freq}
-        `;
-    } catch (error) {
-        console.error('Error al procesar los datos:', error);
-        receivedDataElement.innerHTML = 'Error al mostrar los datos.';
     }
-}
 
     setInterval(() => {
         const data = localStorage.getItem('realTimeData') || '{}';
