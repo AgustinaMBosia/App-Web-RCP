@@ -136,3 +136,13 @@ canvas {
         gap: 10px;
     }
 }
+
+.watermark {
+    position: fixed;
+    top: 10px; 
+    right: 10px; 
+    z-index: 999; 
+    pointer-events: none;
+    width: 150px; 
+    height: auto; 
+}
