@@ -99,3 +99,24 @@ canvas {
     margin: 20px auto;
 }
 
+/*adaptar el tamaño de los gráficos a la pantalla*/
+
+@media (max-width: 768px) {
+    .chart-container {
+        grid-template-columns: 1fr; /* Una columna para los gráficos */
+        gap: 10px; /* Reducir el espacio entre gráficos */
+    }
+
+    #freqChart,
+    #profChart {
+        width: 100% !important; /* Asegura que los gráficos se adapten al ancho del contenedor */
+        height: auto !important; /* Ajusta la altura proporcionalmente */
+    }
+
+    #pieChart,
+    #handPosChart {
+        width: 100% !important; /* También se adapta al ancho disponible */
+        height: auto !important; /* Altura proporcional */
+    }
+}
+
