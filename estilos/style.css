@@ -6,7 +6,8 @@
     padding: 0;
 }
 
-body {
+body,
+body1 {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -111,7 +112,7 @@ canvas {
 
 /* Estilos adaptativos para dispositivos móviles */
 @media (max-width: 768px) {
-    body {
+    body1 {
         justify-content: flex-start; /* Asegura que el contenido se alinee al principio */
         padding: 20px; /* Agrega espacio alrededor del contenido */
     }
@@ -138,7 +139,7 @@ canvas {
 
     #pieChart,
     #handPosChart {
-        width: 40% !important;
+        width: 100 px!important;
         height: auto !important;
     }
 
