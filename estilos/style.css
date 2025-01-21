@@ -98,6 +98,17 @@ canvas {
     margin: 20px auto;
 }
 
+.watermark {
+    position: fixed;
+    top: 10px; 
+    right: 10px; 
+    z-index: 999; 
+    pointer-events: none;
+    width: 150px; 
+    height: auto; 
+}
+
+
 /* Estilos adaptativos para dispositivos móviles */
 @media (max-width: 768px) {
     body {
@@ -106,7 +117,7 @@ canvas {
     }
 
     h1, h2 {
-        margin-top: 10px; /* Reduce el espacio superior */
+        margin-top: 60px; /* Reduce el espacio superior */
     }
 
     .charts-container {
@@ -135,14 +146,13 @@ canvas {
         grid-template-columns: 1fr; /* Una columna para los gráficos */
         gap: 10px;
     }
+    .watermark {
+        position: absolute; 
+        top: 5px;
+        right: 5px; 
+        width: 150px; 
+        height: auto;
+        padding: 10px;
+    }
 }
 
-.watermark {
-    position: fixed;
-    top: 10px; 
-    right: 10px; 
-    z-index: 999; 
-    pointer-events: none;
-    width: 150px; 
-    height: auto; 
-}
