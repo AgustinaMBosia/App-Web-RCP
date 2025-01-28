@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RCP UCC</string>
+    <string name="title_activity_main">RCP UCC</string>
+    <string name="package_name">com.ucc.rcp</string>
+    <string name="custom_url_scheme">com.ucc.rcp</string>
+</resources>
