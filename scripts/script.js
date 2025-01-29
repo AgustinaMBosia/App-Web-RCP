@@ -1,4 +1,6 @@
-let simulationInterval = null; // Variable global para controlar la simulación
+let simulationInterval = null; // Control de simulación
+let serialPort = null; // Puerto serie
+let serialReader = null; // Lector de datos del puerto serie
 
 const receivedDataElement = document.getElementById('receivedData');
 
@@ -20,7 +22,7 @@ function processData(data) {
             Profundidad: ${profundidad}
             Frecuencia: ${freq}
         `;
-        
+
         const processedData = {
             handPosition,
             profundidad: parseInt(profundidad, 10),
@@ -41,7 +43,7 @@ function processData(data) {
     }
 }
 
-// Configuración de botones
+// 🔵 **Bluetooth: Conexión y Lectura de Datos**
 document.getElementById('bluetoothButton').addEventListener('click', async () => {
     try {
         const device = await navigator.bluetooth.requestDevice({
@@ -67,6 +69,34 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
+// 🔌 **Serial: Conexión y Lectura de Datos**
+document.getElementById('serialButton').addEventListener('click', async () => {
+    try {
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 9600 });
+
+        serialReader = serialPort.readable.getReader();
+
+        alert('Conexión Serial establecida. Abriendo visualización...');
+        openVisualizationPage();
+
+        while (true) {
+            const { value, done } = await serialReader.read();
+            if (done) {
+                console.log('Conexión serial cerrada.');
+                break;
+            }
+
+            const data = new TextDecoder().decode(value);
+            processData(data);
+        }
+    } catch (error) {
+        console.error('Error en la conexión serial:', error);
+        alert('No se pudo conectar al dispositivo serie.');
+    }
+});
+
+// ⏯ **Simulación de Datos**
 document.getElementById('simulateButton').addEventListener('click', () => {
     if (simulationInterval) {
         clearInterval(simulationInterval);
@@ -82,6 +112,7 @@ document.getElementById('simulateButton').addEventListener('click', () => {
     }
 });
 
+// Generar datos simulados
 function generateSimulatedData() {
     const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
     const profundidad = Math.floor(Math.random() * 10);
