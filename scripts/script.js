@@ -1,49 +1,38 @@
-let simulationInterval = null; // Control de simulación
-let serialPort = null; // Puerto serie
-let serialReader = null; // Lector de datos del puerto serie
+let simulationInterval = null; 
+let bluetoothInterval = null;
+let serialInterval = null;
+
+let lastBluetoothData = null;
+let lastSerialData = null;
 
 const receivedDataElement = document.getElementById('receivedData');
 
-// Redirigir a la página de visualización
 function openVisualizationPage() {
     window.open('visualization.html', '_blank');
 }
 
-// Función para procesar y enviar datos al almacenamiento
+//  PROCESAR DATOS
 function processData(data) {
     const regex = /\nU(OK|NOK),P(\d+),F(\d+):/;
     const match = data.match(regex);
 
     if (match) {
         const [_, handPosition, profundidad, freq] = match;
-
-        receivedDataElement.textContent = `
-            Posición de la Mano: ${handPosition}
-            Profundidad: ${profundidad}
-            Frecuencia: ${freq}
-        `;
-
+        
         const processedData = {
             handPosition,
             profundidad: parseInt(profundidad, 10),
             freq: parseInt(freq, 10),
         };
 
-        // Guardar en localStorage y disparar evento
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
-        localStorage.setItem('updateTime', new Date().toISOString()); // Para disparar el evento
-
+        localStorage.setItem('updateTime', new Date().toISOString());
     } else {
-        receivedDataElement.textContent = `
-            Posición de la Mano: ${handPosition}
-            Profundidad: ${profundidad}
-            Frecuencia: ${freq}
-        `;
         console.warn('Trama inválida o no procesada:', data);
     }
 }
 
-// 🔵 **Bluetooth: Conexión y Lectura de Datos**
+//  CONEXIÓN BLUETOOTH
 document.getElementById('bluetoothButton').addEventListener('click', async () => {
     try {
         const device = await navigator.bluetooth.requestDevice({
@@ -56,12 +45,20 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
         const characteristic = await service.getCharacteristic('manufacturer_name_string');
 
         characteristic.addEventListener('characteristicvaluechanged', (event) => {
-            const data = new TextDecoder().decode(event.target.value);
-            processData(data);
+            lastBluetoothData = new TextDecoder().decode(event.target.value);
         });
 
         await characteristic.startNotifications();
-        alert('Conexión Bluetooth establecida. Abriendo visualización...');
+        alert('Conexión Bluetooth establecida.');
+
+        // Intervalo para actualizar datos Bluetooth
+        bluetoothInterval = setInterval(() => {
+            if (lastBluetoothData) {
+                processData(lastBluetoothData);
+                lastBluetoothData = null;
+            }
+        }, 1000);
+        
         openVisualizationPage();
     } catch (error) {
         console.error('Error al conectar vía Bluetooth:', error);
@@ -69,7 +66,6 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
-// 🔌 **Serial: Conexión y Lectura de Datos**
 document.getElementById('serialButton').addEventListener('click', async () => {
     try {
         serialPort = await navigator.serial.requestPort();
@@ -77,26 +73,33 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
         serialReader = serialPort.readable.getReader();
 
-        alert('Conexión Serial establecida. Abriendo visualización...');
-        openVisualizationPage();
-
-        while (true) {
-            const { value, done } = await serialReader.read();
-            if (done) {
-                console.log('Conexión serial cerrada.');
-                break;
+        async function readSerialData() {
+            while (serialPort && serialReader) {
+                const { value, done } = await serialReader.read();
+                if (done) break;
+                lastSerialData = new TextDecoder().decode(value);
             }
-
-            const data = new TextDecoder().decode(value);
-            processData(data);
         }
+
+        readSerialData();
+
+        // Intervalo para actualizar datos Serial
+        serialInterval = setInterval(() => {
+            if (lastSerialData) {
+                processData(lastSerialData);
+                lastSerialData = null;
+            }
+        }, 1000);
+        
+        alert('Conexión Serial establecida.');
+        openVisualizationPage();
     } catch (error) {
-        console.error('Error en la conexión serial:', error);
-        alert('No se pudo conectar al dispositivo serie.');
+        console.error('Error en conexión Serial:', error);
+        alert('No se pudo conectar al dispositivo Serial.');
     }
 });
 
-// ⏯ **Simulación de Datos**
+// SIMULACIÓN
 document.getElementById('simulateButton').addEventListener('click', () => {
     if (simulationInterval) {
         clearInterval(simulationInterval);
@@ -106,13 +109,13 @@ document.getElementById('simulateButton').addEventListener('click', () => {
         simulationInterval = setInterval(() => {
             const simulatedData = generateSimulatedData();
             processData(simulatedData);
-        }, 1000); // Cada segundo
-        alert('Simulación iniciada. Abriendo visualización...');
+        }, 1000);
+        alert('Simulación iniciada.');
         openVisualizationPage();
     }
 });
 
-// Generar datos simulados
+//Generar datos simulados
 function generateSimulatedData() {
     const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
     const profundidad = Math.floor(Math.random() * 10);
