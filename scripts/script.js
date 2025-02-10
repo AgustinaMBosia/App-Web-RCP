@@ -5,6 +5,10 @@ let serialInterval = null;
 let lastBluetoothData = null;
 let lastSerialData = null;
 
+let handPosition = null;
+let profundidad = null;
+let freq = null;
+
 const receivedDataElement = document.getElementById('receivedData');
 
 function openVisualizationPage() {
@@ -27,9 +31,11 @@ function processData(data) {
 
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
         localStorage.setItem('updateTime', new Date().toISOString());
+
     } else {
         console.warn('Trama inválida o no procesada:', data);
     }
+
 }
 
 //  CONEXIÓN BLUETOOTH
@@ -66,20 +72,40 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
+/**/
+
 document.getElementById('serialButton').addEventListener('click', async () => {
     try {
         serialPort = await navigator.serial.requestPort();
         await serialPort.open({ baudRate: 9600 });
 
         serialReader = serialPort.readable.getReader();
+        const decoder = new TextDecoder("utf-8", { stream: true }); // Mantiene estado entre lecturas
+        let buffer = "";
 
         async function readSerialData() {
             while (serialPort && serialReader) {
                 const { value, done } = await serialReader.read();
                 if (done) break;
-                lastSerialData = new TextDecoder().decode(value);
+
+                const text = decoder.decode(value, { stream: true });
+                buffer += text; // Acumula texto en un buffer
+
+                if (buffer.includes("\n")) {  // Suponiendo que los datos terminan con un salto de línea
+                    let lines = buffer.split("\n");
+                    buffer = lines.pop(); // Guarda cualquier dato incompleto para la siguiente iteración
+                    
+                    for (let line of lines) {
+                        //console.log(line); // Imprime líneas completas
+                        lastSerialData = line;
+                    }
+                }
             }
         }
+
+
+    
+    
 
         readSerialData();
 
@@ -89,7 +115,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 processData(lastSerialData);
                 lastSerialData = null;
             }
-        }, 1000);
+        }, 2000);
         
         alert('Conexión Serial establecida.');
         openVisualizationPage();
@@ -98,6 +124,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         alert('No se pudo conectar al dispositivo Serial.');
     }
 });
+
 
 // SIMULACIÓN
 document.getElementById('simulateButton').addEventListener('click', () => {
