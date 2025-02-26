@@ -17,12 +17,21 @@ function openVisualizationPage() {
 
 //  PROCESAR DATOS
 function processData(data) {
-    const regex = /\nU(OK|NOK),P(\d+),F(\d+):/;
+    data = data.replace(/\r/g, "").trim(); // Eliminar caracteres \r y espacios extra
+
+    const regex = /U(OK|NOK),P(\d+),F(\d+):/; // Ajuste de la regex
     const match = data.match(regex);
 
     if (match) {
         const [_, handPosition, profundidad, freq] = match;
         
+        receivedDataElement.textContent = `
+            Posición de la Mano: ${handPosition}
+            Profundidad: ${profundidad}
+            Frecuencia: ${freq}
+        `;
+
+
         const processedData = {
             handPosition,
             profundidad: parseInt(profundidad, 10),
@@ -35,7 +44,6 @@ function processData(data) {
     } else {
         console.warn('Trama inválida o no procesada:', data);
     }
-
 }
 
 //  CONEXIÓN BLUETOOTH
@@ -63,7 +71,7 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
                 processData(lastBluetoothData);
                 lastBluetoothData = null;
             }
-        }, 1000);
+        }, 500);
         
         openVisualizationPage();
     } catch (error) {
@@ -72,7 +80,6 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
-/**/
 
 document.getElementById('serialButton').addEventListener('click', async () => {
     try {
@@ -81,7 +88,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
         serialReader = serialPort.readable.getReader();
         const decoder = new TextDecoder("utf-8", { stream: true }); // Mantiene estado entre lecturas
-        let buffer = "";
+        let buffer = ""; // Buffer para reconstruir mensajes completos
 
         async function readSerialData() {
             while (serialPort && serialReader) {
@@ -89,23 +96,19 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 if (done) break;
 
                 const text = decoder.decode(value, { stream: true });
-                buffer += text; // Acumula texto en un buffer
+                buffer += text; // Acumulamos en el buffer
 
-                if (buffer.includes("\n")) {  // Suponiendo que los datos terminan con un salto de línea
-                    let lines = buffer.split("\n");
-                    buffer = lines.pop(); // Guarda cualquier dato incompleto para la siguiente iteración
-                    
-                    for (let line of lines) {
-                        //console.log(line); // Imprime líneas completas
-                        lastSerialData = line;
-                    }
+                // Revisamos si hay líneas completas (separadas por salto de línea)
+                let lines = buffer.split("\n");
+                buffer = lines.pop(); // Guardamos la última parte incompleta para la siguiente iteración
+
+                for (let line of lines) {
+                    line = line.replace(/\r/g, "").trim(); // Limpiar caracteres no deseados
+                    console.log("Línea procesada:", line);
+                    lastSerialData = line;
                 }
             }
         }
-
-
-    
-    
 
         readSerialData();
 
@@ -115,8 +118,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 processData(lastSerialData);
                 lastSerialData = null;
             }
-        }, 2000);
-        
+        }, 500);
+
         alert('Conexión Serial establecida.');
         openVisualizationPage();
     } catch (error) {
@@ -124,6 +127,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         alert('No se pudo conectar al dispositivo Serial.');
     }
 });
+
+
 
 
 // SIMULACIÓN
@@ -136,7 +141,7 @@ document.getElementById('simulateButton').addEventListener('click', () => {
         simulationInterval = setInterval(() => {
             const simulatedData = generateSimulatedData();
             processData(simulatedData);
-        }, 1000);
+        }, 500);
         alert('Simulación iniciada.');
         openVisualizationPage();
     }
