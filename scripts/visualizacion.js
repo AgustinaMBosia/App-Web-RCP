@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const playStopButton = document.getElementById('playStopButton');
     const resetButton = document.getElementById('resetButton');
+    const saveButton = document.getElementById('saveButton');
 
     let correctExecutions = 0;
     let incorrectExecutions = 0;
@@ -102,8 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let startTracking = false; // No empezar hasta que la mano esté en "OK"
+
     function updateVisualization(data) {
-        if (isPaused) return; // ❌ Ignorar datos mientras está en pausa
+        if (isPaused) return; // Ignorar datos mientras está en pausa
+
 
         try {
             const parsedData = JSON.parse(data);
@@ -111,7 +115,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const prof = parsedData.profundidad || 0;
             const handPos = parsedData.handPosition || 'N/A';
 
-            globalCounter++; // ✅ Se incrementa solo si no está en pausa
+            // Si la posición de manos es "OK", permitimos el registro de datos
+            if (handPos === "OK") {
+                startTracking = true;
+            }
+
+            // Si aún no se ha detectado "OK", ignoramos los datos
+            if (!startTracking) {
+                console.warn("Esperando que la posición de manos sea 'OK' para empezar.");
+                return;
+            }
+
+            globalCounter++; // Se incrementa solo si no está en pausa
 
             if (freqData.labels.length >= 7) {
                 freqData.labels.shift();
@@ -152,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+
     function resetCharts() {
         globalCounter = 0;
         correctExecutions = 0;
@@ -166,7 +182,23 @@ document.addEventListener('DOMContentLoaded', () => {
         pieData.datasets[0].data = [0, 0];
         handPosData.datasets[0].data = [1, 0];
 
+        startTracking = false;
+
+        localStorage.setItem("serialCommand", "reiniciar");
         updateCharts();
+    }
+
+    function saveCharts() {
+        const data = {
+            freq: freqData,
+            prof: profData,
+            pie: pieData,
+            handPos: handPosData,
+        };
+
+        localStorage.setItem('realTimeData', JSON.stringify(data));
+        localStorage.setItem("serialCommand", "terminar");
+        alert('Datos guardados correctamente.');
     }
 
     function toggleCharts() {
@@ -176,9 +208,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     playStopButton.addEventListener('click', toggleCharts);
     resetButton.addEventListener('click', resetCharts);
+    saveButton.addEventListener('click', saveCharts);
 
     setInterval(() => {
         const data = localStorage.getItem('realTimeData') || '{}';
         updateVisualization(data);
     }, 1000);
+
+    startTracking = false; // Variable que controlará el cierre del pop-up
+
+    function abrirPopup() {
+        Swal.fire({
+            title: "Esperando...",
+            text: "El pop-up se cerrará cuando ponga bien la mano.",
+            icon: "info",
+            showConfirmButton: false
+        });
+
+        // Revisar periódicamente si cerrarPopup es true
+        const checkVariable = setInterval(() => {
+            if (startTracking) {
+                Swal.close(); // Cierra el pop-up
+                clearInterval(checkVariable); // Detiene el intervalo
+            }
+        }, 500); // Revisa cada 500ms
+    }
+
+    function cerrarVariable() {
+        startTracking = true; // Cambia la variable y cierra el pop-up
+    }
+
+    // Abre el pop-up automáticamente al cargar la página
+    window.onload = function() {
+        abrirPopup();
+    };
 });
