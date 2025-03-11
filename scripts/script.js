@@ -15,61 +15,6 @@ function openVisualizationPage() {
     window.open('visualization.html', '_blank');
 }
 
-async function checkArduinoTime() {
-    try {
-        // Solicitar acceso al puerto serie
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 });
-
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
-        const writer = port.writable.getWriter();
-        const reader = port.readable.getReader();
-
-        // Enviar comando para solicitar la hora
-        console.log("Solicitando fecha y hora...");
-        await writer.write(encoder.encode("TIME?\n"));
-        writer.releaseLock();
-
-        // Leer la respuesta del Arduino
-        //(esperamos una fecha como "2025-02-26T12:34:56Z")
-        let receivedTime = "";
-        while (true) {
-            const { value, done } = await reader.read();
-            receivedTime += decoder.decode(value, { stream: true });
-
-            if (done || receivedTime.includes("\n")) break; // Salir cuando se reciba una línea completa
-        }
-        reader.releaseLock();
-
-        receivedTime = receivedTime.trim();
-        console.log("Fecha y hora recibida del Arduino:", receivedTime);
-
-        // Convertir a objeto Date
-        const arduinoTime = new Date(receivedTime);
-        const systemTime = new Date();
-
-        // Comparar con la hora del sistema (diferencia en segundos)
-        const diff = Math.abs((systemTime - arduinoTime) / 1000);
-
-        if (diff <= 10) { // Permitir hasta 10 segundos de diferencia A CHEQUEAR
-            console.log("Hora válida. Enviando 'OK'.");
-            const writer = port.writable.getWriter();
-            await writer.write(encoder.encode("OK\n"));
-            // capaz esta raro, incluye salto de línea
-            writer.releaseLock();
-        } else {
-            console.log("Hora incorrecta. No se envió 'OK'.");
-        }
-
-        await port.close(); // Cerrar el puerto cuando termine
-
-    } catch (error) {
-        console.error("Error en la conexión:", error);
-    }
-}
-
-
 //  PROCESAR DATOS
 function processData(data) {
     data = data.replace(/\r/g, "").trim(); // Eliminar caracteres \r y espacios extra
@@ -135,6 +80,72 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
+async function sendToModule(message) {
+    try {
+        console.log(serialPort);
+        const encoder = new TextEncoder();
+        const writer = serialPort.writable.getWriter();
+        await writer.write(encoder.encode(message + "\n"));
+        writer.releaseLock();
+
+        console.log(`✅ Mensaje enviado: ${message}`);
+    } catch (error) {
+        console.error("❌ Error al enviar mensaje:", error);
+    }
+}
+/*
+
+async function checkArduinoTime() {
+    try {
+        // Solicitar acceso al puerto serie
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const writer = serialPort.writable.getWriter();
+        const reader = serialPort.readable.getReader();
+
+        // Enviar comando para solicitar la hora
+        console.log("Solicitando fecha y hora...");
+        await writer.write(encoder.encode("TIME?\n"));
+        writer.releaseLock();
+
+        // Leer la respuesta del Arduino
+        //(esperamos una fecha como "2025-02-26T12:34:56Z")
+        let receivedTime = "";
+        while (true) {
+            const { value, done } = await reader.read();
+            receivedTime += decoder.decode(value, { stream: true });
+
+            if (done || receivedTime.includes("\n")) break; // Salir cuando se reciba una línea completa
+        }
+        reader.releaseLock();
+
+        receivedTime = receivedTime.trim();
+        console.log("Fecha y hora recibida del Arduino:", receivedTime);
+
+        // Convertir a objeto Date
+        const arduinoTime = new Date(receivedTime);
+        const systemTime = new Date();
+
+        // Comparar con la hora del sistema (diferencia en segundos)
+        const diff = Math.abs((systemTime - arduinoTime) / 1000);
+
+        if (diff <= 10) { // Permitir hasta 10 segundos de diferencia A CHEQUEAR
+            console.log("Hora válida. Enviando 'OK'.");
+            const writer = port.writable.getWriter();
+            await writer.write(encoder.encode("ok\n"));
+            // capaz esta raro, incluye salto de línea
+            writer.releaseLock();
+        } else {
+            console.log("Hora incorrecta. No se envió 'OK'.");
+        }
+
+        await port.close(); // Cerrar el puerto cuando termine
+
+    } catch (error) {
+        console.error("Error en la conexión:", error);
+    }
+}
+    */
 
 document.getElementById('serialButton').addEventListener('click', async () => {
     try {
@@ -177,9 +188,9 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
         alert('Conexión Serial establecida.');
         // Enviar mensaje "OK"
-        const encoder = new TextEncoder();
-        const data = encoder.encode("OK");
-        await characteristic.writeValue(data);
+
+
+        sendToModule("ok");
 
         checkArduinoTime();
 
@@ -217,6 +228,7 @@ function generateSimulatedData() {
     return `\nU${handPosition},P${profundidad},F${freq}:`;
 }
 
+/*
 async function sendToModule(message) {
     try {
         if (!port) {
@@ -233,7 +245,9 @@ async function sendToModule(message) {
     } catch (error) {
         console.error("❌ Error al enviar mensaje:", error);
     }
-}
+
+}*/
+
 
 // Escuchar cambios en localStorage
 window.addEventListener("storage", (event) => {
