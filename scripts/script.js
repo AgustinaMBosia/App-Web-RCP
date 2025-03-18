@@ -167,6 +167,13 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     line = line.replace(/\r/g, "").trim();
                     console.log("Línea procesada:", line);
                     lastSerialData = line;
+                    /* espera el hola para mandar ok y checkear el tiempo
+                    el unico problema es que hace la verificacion para cadadato recibido
+                    if (line === "hola"){
+                        setTimeout(() => sendToModule("ok"), 25000); // Agregar un delay
+                        setTimeout(() => checkArduinoTime(serialReader), 30000); // Agregar un delay
+                    }
+                    */
                 }
             }
         }
