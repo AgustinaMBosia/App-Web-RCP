@@ -9,13 +9,15 @@ let handPosition = null;
 let profundidad = null;
 let freq = null;
 
+let serialPort= null;
+
 const receivedDataElement = document.getElementById('receivedData');
 
 function openVisualizationPage() {
     window.open('visualization.html', '_blank');
 }
 
-//  PROCESAR DATOS
+// PROCESAR DATOS
 function processData(data) {
     data = data.replace(/\r/g, "").trim(); // Eliminar caracteres \r y espacios extra
 
@@ -46,7 +48,7 @@ function processData(data) {
     }
 }
 
-//  CONEXIÓN BLUETOOTH
+// CONEXIÓN BLUETOOTH
 document.getElementById('bluetoothButton').addEventListener('click', async () => {
     try {
         const device = await navigator.bluetooth.requestDevice({
@@ -72,7 +74,7 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
                 lastBluetoothData = null;
             }
         }, 500);
-        
+
         openVisualizationPage();
     } catch (error) {
         console.error('Error al conectar vía Bluetooth:', error);
@@ -81,80 +83,75 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
 });
 
 async function sendToModule(message) {
+    if (!serialPort) {
+        console.error("❌ No hay conexión serial activa.");
+        return;
+    }
     try {
-        console.log(serialPort);
         const encoder = new TextEncoder();
         const writer = serialPort.writable.getWriter();
         await writer.write(encoder.encode(message + "\n"));
         writer.releaseLock();
-
         console.log(`✅ Mensaje enviado: ${message}`);
     } catch (error) {
         console.error("❌ Error al enviar mensaje:", error);
     }
 }
-/*
 
-async function checkArduinoTime() {
+async function checkArduinoTime(serialReader) {
     try {
-        // Solicitar acceso al puerto serie
+        if (!serialPort) {
+            console.error("❌ No hay conexión serial activa.");
+            return;
+        }
+
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const writer = serialPort.writable.getWriter();
-        const reader = serialPort.readable.getReader();
 
-        // Enviar comando para solicitar la hora
+        /*
         console.log("Solicitando fecha y hora...");
-        await writer.write(encoder.encode("TIME?\n"));
+        await writer.write(encoder.encode("TIME?\n"));                          // pregunta por TIME
         writer.releaseLock();
+        */
 
-        // Leer la respuesta del Arduino
-        //(esperamos una fecha como "2025-02-26T12:34:56Z")
         let receivedTime = "";
+        console.log("Esperando tiempo del Arduino...");                              //formato de hora 22-31:
         while (true) {
-            const { value, done } = await reader.read();
+            const { value, done } = await serialReader.read();
+            if (done) break;
             receivedTime += decoder.decode(value, { stream: true });
-
-            if (done || receivedTime.includes("\n")) break; // Salir cuando se reciba una línea completa
+            if (receivedTime.includes("\n")) break;
         }
-        reader.releaseLock();
 
-        receivedTime = receivedTime.trim();
+        //receivedTime = receivedTime.trim();
         console.log("Fecha y hora recibida del Arduino:", receivedTime);
 
-        // Convertir a objeto Date
         const arduinoTime = new Date(receivedTime);
         const systemTime = new Date();
-
-        // Comparar con la hora del sistema (diferencia en segundos)
         const diff = Math.abs((systemTime - arduinoTime) / 1000);
 
-        if (diff <= 10) { // Permitir hasta 10 segundos de diferencia A CHEQUEAR
+        if (diff <= 10) {
             console.log("Hora válida. Enviando 'OK'.");
-            const writer = port.writable.getWriter();
-            await writer.write(encoder.encode("ok\n"));
-            // capaz esta raro, incluye salto de línea
-            writer.releaseLock();
+            sendToModule("OK");
         } else {
             console.log("Hora incorrecta. No se envió 'OK'.");
         }
-
-        await port.close(); // Cerrar el puerto cuando termine
-
     } catch (error) {
         console.error("Error en la conexión:", error);
     }
 }
-    */
 
+
+// CONEXIÓN SERIAL
 document.getElementById('serialButton').addEventListener('click', async () => {
     try {
         serialPort = await navigator.serial.requestPort();
         await serialPort.open({ baudRate: 9600 });
 
-        serialReader = serialPort.readable.getReader();
-        const decoder = new TextDecoder("utf-8", { stream: true }); // Mantiene estado entre lecturas
-        let buffer = ""; // Buffer para reconstruir mensajes completos
+        const serialReader = serialPort.readable.getReader(); // Solo una vez
+        const decoder = new TextDecoder("utf-8", { stream: true });
+        let buffer = "";
 
         async function readSerialData() {
             while (serialPort && serialReader) {
@@ -162,14 +159,12 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 if (done) break;
 
                 const text = decoder.decode(value, { stream: true });
-                buffer += text; // Acumulamos en el buffer
-
-                // Revisamos si hay líneas completas (separadas por salto de línea)
+                buffer += text;
                 let lines = buffer.split("\n");
-                buffer = lines.pop(); // Guardamos la última parte incompleta para la siguiente iteración
+                buffer = lines.pop();
 
                 for (let line of lines) {
-                    line = line.replace(/\r/g, "").trim(); // Limpiar caracteres no deseados
+                    line = line.replace(/\r/g, "").trim();
                     console.log("Línea procesada:", line);
                     lastSerialData = line;
                 }
@@ -178,7 +173,6 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
         readSerialData();
 
-        // Intervalo para actualizar datos Serial
         serialInterval = setInterval(() => {
             if (lastSerialData) {
                 processData(lastSerialData);
@@ -187,75 +181,13 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         }, 500);
 
         alert('Conexión Serial establecida.');
-        // Enviar mensaje "OK"
 
+        setTimeout(() => sendToModule("ok"), 25000); // Agregar un delay
 
-        sendToModule("ok");
-
-        checkArduinoTime();
-
+        setTimeout(() => checkArduinoTime(serialReader), 30000); // Agregar un delay
         openVisualizationPage();
     } catch (error) {
         console.error('Error en conexión Serial:', error);
         alert('No se pudo conectar al dispositivo Serial.');
     }
 });
-
-
-
-
-// SIMULACIÓN
-document.getElementById('simulateButton').addEventListener('click', () => {
-    if (simulationInterval) {
-        clearInterval(simulationInterval);
-        simulationInterval = null;
-        alert('Simulación detenida.');
-    } else {
-        simulationInterval = setInterval(() => {
-            const simulatedData = generateSimulatedData();
-            processData(simulatedData);
-        }, 500);
-        alert('Simulación iniciada.');
-        openVisualizationPage();
-    }
-});
-
-//Generar datos simulados
-function generateSimulatedData() {
-    const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
-    const profundidad = Math.floor(Math.random() * 10);
-    const freq = Math.floor(Math.random() * 200) + 50;
-    return `\nU${handPosition},P${profundidad},F${freq}:`;
-}
-
-/*
-async function sendToModule(message) {
-    try {
-        if (!port) {
-            console.error("⚠ No hay puerto serie abierto.");
-            return;
-        }
-
-        const encoder = new TextEncoder();
-        const writer = port.writable.getWriter();
-        await writer.write(encoder.encode(message + "\n"));
-        writer.releaseLock();
-
-        console.log(`✅ Mensaje enviado: ${message}`);
-    } catch (error) {
-        console.error("❌ Error al enviar mensaje:", error);
-    }
-
-}*/
-
-
-// Escuchar cambios en localStorage
-window.addEventListener("storage", (event) => {
-    if (event.key === "serialCommand" && event.newValue === "reiniciar") {
-        sendToModule("reiniciar");
-    }
-    else if (event.key === "serialCommand" && event.newValue === "terminar") {
-        sendToModule("terminar");
-    }
-});
-
