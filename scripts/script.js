@@ -98,16 +98,13 @@ async function sendToModule(message) {
     }
 }
 
-async function checkArduinoTime(serialReader) {
+async function checkArduinoTime(line) {
     try {
         if (!serialPort) {
             console.error("❌ No hay conexión serial activa.");
             return;
         }
 
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
-        const writer = serialPort.writable.getWriter();
 
         /*
         console.log("Solicitando fecha y hora...");
@@ -115,32 +112,37 @@ async function checkArduinoTime(serialReader) {
         writer.releaseLock();
         */
 
-        let receivedTime = "";
+        let receivedTime = line;
         console.log("Esperando tiempo del Arduino...");                              //formato de hora 22-31:
-        while (true) {
-            const { value, done } = await serialReader.read();
-            if (done) break;
-            receivedTime += decoder.decode(value, { stream: true });
-            if (receivedTime.includes("\n")) break;
+        
+        if (!/^\d{4}-\d{1,2}-\d{1,2}T\d{2}:\d{2}:\d{2}Z$/.test(line)) {
+            console.error("❌ Formato de tiempo inválido:", receivedTime);
+            return;
         }
 
-        //receivedTime = receivedTime.trim();
-        console.log("Fecha y hora recibida del Arduino:", receivedTime);
-
         const arduinoTime = new Date(receivedTime);
+        arduinoTime.setHours(arduinoTime.getHours() + 3);
         const systemTime = new Date();
-        const diff = Math.abs((systemTime - arduinoTime) / 1000);
+        console.log("la hora del sistema es: ", systemTime);
+        console.log("la hora del arduino es: ", arduinoTime, receivedTime);
 
-        if (diff <= 10) {
-            console.log("Hora válida. Enviando 'OK'.");
-            sendToModule("OK");
+        const diff = Math.abs((systemTime - arduinoTime) / 1000);
+        console.log("la diferencia es de: ", diff);
+        if (diff <= 20000) {
+            console.log("Hora válida. Enviando 'ok'.");
+            var i=0;
+            while (i<2000){     
+                sendToModule("ok")
+                i++;
+            }
         } else {
-            console.log("Hora incorrecta. No se envió 'OK'.");
+            console.log("Hora incorrecta. No se envió 'ok'.");
         }
     } catch (error) {
         console.error("Error en la conexión:", error);
     }
 }
+
 
 
 // CONEXIÓN SERIAL
@@ -168,17 +170,25 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     console.log("Línea procesada:", line);
                     lastSerialData = line;
                     /* espera el hola para mandar ok y checkear el tiempo
-                    el unico problema es que hace la verificacion para cadadato recibido
-                    if (line === "hola"){
-                        setTimeout(() => sendToModule("ok"), 25000); // Agregar un delay
-                        setTimeout(() => checkArduinoTime(serialReader), 30000); // Agregar un delay
+                    el unico problema es que hace la verificacion para cada dato recibido*/
+                    const match = line.match("hola");
+                    const regex1 = /^\d{4}-\d{1,2}-\d{1,2}T\d{2}:\d{2}:\d{2}Z$/; // Ajuste de la regex
+                    const match1 = line.match(regex1);
+
+                    if (match) {
+                        setTimeout(() => sendToModule("ok"), 500); // Agregar un delay
                     }
-                    */
+                    if (match1) {
+                        setTimeout(() => checkArduinoTime(line), 1000); // Agregar un delay
+                    }
+                    
                 }
+
             }
         }
 
         readSerialData();
+
 
         serialInterval = setInterval(() => {
             if (lastSerialData) {
@@ -189,9 +199,6 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
         alert('Conexión Serial establecida.');
 
-        setTimeout(() => sendToModule("ok"), 25000); // Agregar un delay
-
-        setTimeout(() => checkArduinoTime(serialReader), 30000); // Agregar un delay
         openVisualizationPage();
     } catch (error) {
         console.error('Error en conexión Serial:', error);
