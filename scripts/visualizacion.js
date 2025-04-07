@@ -240,7 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Abre el pop-up automáticamente al cargar la página
     window.onload = function() {
-        //abrirPopup();
-        startTracking=true;
+        abrirPopup();
     };
 });

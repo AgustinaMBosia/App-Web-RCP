@@ -11,6 +11,8 @@ let freq = null;
 
 let serialPort= null;
 
+let handsFlag = false;
+
 const receivedDataElement = document.getElementById('receivedData');
 
 function openVisualizationPage() {
@@ -98,51 +100,31 @@ async function sendToModule(message) {
     }
 }
 
-async function checkArduinoTime(line) {
-    try {
-        if (!serialPort) {
-            console.error("❌ No hay conexión serial activa.");
-            return;
-        }
+// const systemTime = new Date(); PARA SACAR TIEMPO DE COMPUTADORA
 
-
-        /*
-        console.log("Solicitando fecha y hora...");
-        await writer.write(encoder.encode("TIME?\n"));                          // pregunta por TIME
-        writer.releaseLock();
-        */
-
-        let receivedTime = line;
-        console.log("Esperando tiempo del Arduino...");                              //formato de hora 22-31:
-        
-        if (!/^\d{4}-\d{1,2}-\d{1,2}T\d{2}:\d{2}:\d{2}Z$/.test(line)) {
-            console.error("❌ Formato de tiempo inválido:", receivedTime);
-            return;
-        }
-
-        const arduinoTime = new Date(receivedTime);
-        arduinoTime.setHours(arduinoTime.getHours() + 3);
-        const systemTime = new Date();
-        console.log("la hora del sistema es: ", systemTime);
-        console.log("la hora del arduino es: ", arduinoTime, receivedTime);
-
-        const diff = Math.abs((systemTime - arduinoTime) / 1000);
-        console.log("la diferencia es de: ", diff);
-        if (diff <= 20000) {
-            console.log("Hora válida. Enviando 'ok'.");
-            var i=0;
-            while (i<2000){     
-                sendToModule("ok")
-                i++;
-            }
-        } else {
-            console.log("Hora incorrecta. No se envió 'ok'.");
-        }
-    } catch (error) {
-        console.error("Error en la conexión:", error);
+// SIMULACIÓN
+document.getElementById('simulateButton').addEventListener('click', () => {
+    if (simulationInterval) {
+        clearInterval(simulationInterval);
+        simulationInterval = null;
+        alert('Simulación detenida.');
+    } else {
+        simulationInterval = setInterval(() => {
+            const simulatedData = generateSimulatedData();
+            processData(simulatedData);
+        }, 500);
+        alert('Simulación iniciada.');
+        openVisualizationPage();
     }
-}
+});
 
+//Generar datos simulados
+function generateSimulatedData() {
+    const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
+    const profundidad = Math.floor(Math.random() * 10);
+    const freq = Math.floor(Math.random() * 200) + 50;
+    return `\nU${handPosition},P${profundidad},F${freq}:`;
+}
 
 
 // CONEXIÓN SERIAL
@@ -172,18 +154,19 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     /* espera el hola para mandar ok y checkear el tiempo
                     el unico problema es que hace la verificacion para cada dato recibido*/
                     const match = line.match("hola");
-                    const regex1 = /^\d{4}-\d{1,2}-\d{1,2}T\d{2}:\d{2}:\d{2}Z$/; // Ajuste de la regex
-                    const match1 = line.match(regex1);
 
                     if (match) {
                         setTimeout(() => sendToModule("ok"), 500); // Agregar un delay
-                    }
-                    if (match1) {
-                        setTimeout(() => checkArduinoTime(line), 1000); // Agregar un delay
+                        setTimeout(() => sendToModule("statusmodule"), 500); // Agregar un delay
+                        /*processData(lastSerialData);
+                        if (handPosition == 'OK'){
+                            handsFlag = true;
+                        }
+                            */
+
                     }
                     
                 }
-
             }
         }
 
