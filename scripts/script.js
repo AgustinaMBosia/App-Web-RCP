@@ -44,6 +44,8 @@ function processData(data) {
 
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
         localStorage.setItem('updateTime', new Date().toISOString());
+        
+        sendToModule("ENVIAR INFO MUÑECO");
 
     } else {
         console.warn('Trama inválida o no procesada:', data);
@@ -102,6 +104,7 @@ async function sendToModule(message) {
 
 // const systemTime = new Date(); PARA SACAR TIEMPO DE COMPUTADORA
 
+
 // SIMULACIÓN
 document.getElementById('simulateButton').addEventListener('click', () => {
     if (simulationInterval) {
@@ -151,20 +154,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     line = line.replace(/\r/g, "").trim();
                     console.log("Línea procesada:", line);
                     lastSerialData = line;
-                    /* espera el hola para mandar ok y checkear el tiempo
-                    el unico problema es que hace la verificacion para cada dato recibido*/
-                    const match = line.match("hola");
 
-                    if (match) {
-                        setTimeout(() => sendToModule("ok"), 500); // Agregar un delay
-                        setTimeout(() => sendToModule("statusmodule"), 500); // Agregar un delay
-                        /*processData(lastSerialData);
-                        if (handPosition == 'OK'){
-                            handsFlag = true;
-                        }
-                            */
-
-                    }
+                   
                     
                 }
             }
@@ -174,15 +165,37 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
 
         serialInterval = setInterval(() => {
+            const match = lastSerialData.match("hola");
+            const match2 = lastSerialData.match("TERMINO LA MANIOBRA");
+            const match3 = lastSerialData.match("manos estan ok");
+            
+
             if (lastSerialData) {
                 processData(lastSerialData);
                 lastSerialData = null;
+                /* 
+                - esto es lo que hace la iteracion 
+                - podemos clavar aca la pedida de datos "ENVIAR DATOS MUÑECO" y la lectura del "Hola"
+                */
             }
+            if (match) {
+                setTimeout(() => sendToModule("ok"), 500); // Agregar un delay
+                setTimeout(() => sendToModule("ENVIAR SI MANOS ESTAN OK"), 500); // Agregar un delay 
+            }
+            if (match2){
+
+            }
+            if (match3){
+                setTimeout(() => sendToModule("ENVIAR DATOS MUÑECO"), 500);
+            }
+            
+
         }, 500);
 
         alert('Conexión Serial establecida.');
 
         openVisualizationPage();
+
     } catch (error) {
         console.error('Error en conexión Serial:', error);
         alert('No se pudo conectar al dispositivo Serial.');

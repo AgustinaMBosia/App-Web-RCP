@@ -234,12 +234,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 500); // Revisa cada 500ms
     }
 
-    function cerrarVariable() {
-        startTracking = true; // Cambia la variable y cierra el pop-up
-    }
 
     // Abre el pop-up automáticamente al cargar la página
     window.onload = function() {
         abrirPopup();
+        
     };
 });
