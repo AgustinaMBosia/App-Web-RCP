@@ -45,7 +45,7 @@ function processData(data) {
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
         localStorage.setItem('updateTime', new Date().toISOString());
         
-        sendToModule("ENVIAR INFO MUÑECO");
+        sendToModule("enviar datos");
 
     } else {
         console.warn('Trama inválida o no procesada:', data);
@@ -154,20 +154,18 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     line = line.replace(/\r/g, "").trim();
                     console.log("Línea procesada:", line);
                     lastSerialData = line;
-
-                   
-                    
                 }
             }
         }
 
         readSerialData();
 
+        var flag = 1;
 
         serialInterval = setInterval(() => {
             const match = lastSerialData.match("hola");
-            const match2 = lastSerialData.match("TERMINO LA MANIOBRA");
-            const match3 = lastSerialData.match("manos estan ok");
+            const match2 = lastSerialData.match("buddyFINISH");
+            const match3 = lastSerialData.match("manos ok");
             
 
             if (lastSerialData) {
@@ -180,17 +178,33 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             }
             if (match) {
                 setTimeout(() => sendToModule("ok"), 500); // Agregar un delay
-                setTimeout(() => sendToModule("ENVIAR SI MANOS ESTAN OK"), 500); // Agregar un delay 
+                setTimeout(() => sendToModule("enviar manos"), 15000); // Agregar un delay manos ok   
+                flag = 2;
             }
+            
             if (match2){
 
             }
+
             if (match3){
-                setTimeout(() => sendToModule("ENVIAR DATOS MUÑECO"), 500);
+                console.log("se recepto el manos");
+                setTimeout(() => sendToModule("enviar datos"), 500);  
+                flag = 4;
+            }
+
+            if (flag === 2){
+                setTimeout(() => sendToModule("enviar manos"), 10000);
+                setTimeout(() => sendToModule("enviar manos"), 20000);
+                flag = 4;
+            }
+            if (flag === 4){
+                setTimeout(() => sendToModule("enviar datos"), 1100); 
+                setTimeout(() => sendToModule("enviar datos"), 5500); 
+                setTimeout(() => sendToModule("enviar datos"), 10000); 
             }
             
 
-        }, 500);
+        }, 100);
 
         alert('Conexión Serial establecida.');
 
