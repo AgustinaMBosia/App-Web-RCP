@@ -200,7 +200,9 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             if (flag === 4){
                 setTimeout(() => sendToModule("enviar datos"), 1100); 
                 setTimeout(() => sendToModule("enviar datos"), 5500); 
-                setTimeout(() => sendToModule("enviar datos"), 10000); 
+                setTimeout(() => sendToModule("enviar datos"), 7000); 
+                setTimeout(() => sendToModule("enviar datos"), 9000);
+                setTimeout(() => sendToModule("enviar datos"), 10500);
             }
             
 

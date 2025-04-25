@@ -9,6 +9,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetButton = document.getElementById('resetButton');
     const saveButton = document.getElementById('saveButton');
 
+    const fullFreqData = [];
+    const fullProfData = [];
+    const fullLabels = [];
+
+
+    let recordedData = []; // Array que guardará todos los datos de la maniobra
+
+    const handPositionHistory = [];
+
     let correctExecutions = 0;
     let incorrectExecutions = 0;
     let globalCounter = 0;
@@ -105,6 +114,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let startTracking = false; // No empezar hasta que la mano esté en "OK"
 
+    function downloadCSV() {
+        if (recordedData.length === 0) return;
+    
+        const header = "Timestamp,Frecuencia,Profundidad,PosicionMano\n";
+        const rows = recordedData.map(row =>
+            `${row.timestamp},${row.frecuencia},${row.profundidad},${row.posicionMano}`
+        );
+    
+        const csvContent = header + rows.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+    
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `maniobra_${new Date().toISOString()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+
     function updateVisualization(data) {
         if (isPaused) return; // Ignorar datos mientras está en pausa
 
@@ -140,9 +170,24 @@ document.addEventListener('DOMContentLoaded', () => {
             freqData.datasets[0].data.push(freq);
             profData.datasets[0].data.push(prof);
 
+            fullLabels.push(globalCounter);
+            fullFreqData.push(freq);
+            fullProfData.push(prof);
+
+
+            recordedData.push({
+                timestamp: new Date().toISOString(),
+                frecuencia: freq,
+                profundidad: prof,
+                posicionMano: handPos
+            });
+            
+
             const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
             const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
             const isHandOK = handPos === 'OK';
+            handPositionHistory.push(handPos);
+
 
             if (isFreqCorrect && isProfCorrect && isHandOK) {
                 correctExecutions++;
@@ -172,6 +217,10 @@ document.addEventListener('DOMContentLoaded', () => {
         globalCounter = 0;
         correctExecutions = 0;
         incorrectExecutions = 0;
+        fullFreqData.length = 0;
+        fullProfData.length = 0;
+        fullLabels.length = 0;
+
 
         freqData.labels = [];
         freqData.datasets.forEach(dataset => dataset.data = []);
@@ -180,9 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
         profData.datasets.forEach(dataset => dataset.data = []);
 
         pieData.datasets[0].data = [0, 0];
+
         handPosData.datasets[0].data = [1, 0];
 
         startTracking = false;
+
+        handPositionHistory.length = 0;
 
         localStorage.setItem("serialCommand", "reiniciar");
         updateCharts();
@@ -195,11 +247,101 @@ document.addEventListener('DOMContentLoaded', () => {
             pie: pieData,
             handPos: handPosData,
         };
-
+    
         localStorage.setItem('realTimeData', JSON.stringify(data));
         localStorage.setItem("serialCommand", "terminar");
-        alert('Datos guardados correctamente.');
+    
+        downloadCSV(); // Exporta los datos como CSV
+    
+        const correct = pieData.datasets[0].data[0];
+        const incorrect = pieData.datasets[0].data[1];
+        const total = correct + incorrect;
+        const percentage = total > 0 ? ((correct / total) * 100).toFixed(1) : 0;
+
+        const handOKCount = handPositionHistory.filter(pos => pos === 'OK').length;
+        const handNotOKCount = handPositionHistory.length - handOKCount;
+
+        const handSummaryData = {
+            labels: ['Posición de manos OK', 'No OK'],
+            datasets: [{
+            data: [handOKCount, handNotOKCount],
+            backgroundColor: ['green', 'red']
+        }]
+};
+
+    
+        // Crear una copia de los gráficos en una ventana modal
+        Swal.fire({
+            title: 'Datos guardados correctamente',
+            html: `
+                <p><strong>Porcentaje de ejecuciones correctas:</strong> ${percentage}%</p>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <canvas id="piePreview" width="200" height="200"></canvas>
+                    <canvas id="handPosPreview" width="200" height="200"></canvas>
+                    <canvas id="freqPreview" width="300" height="150"></canvas>
+                    <canvas id="profPreview" width="300" height="150"></canvas>
+                </div>
+            `,
+            width: 800,
+            confirmButtonText: 'OK',
+            didOpen: () => {
+                // Renderizar los gráficos en los canvas del pop-up
+                new Chart(document.getElementById('piePreview').getContext('2d'), {
+                    type: 'pie',
+                    data: pieData,
+                    options: { responsive: false }
+                });
+    
+                new Chart(document.getElementById('handPosPreview').getContext('2d'), {
+                    type: 'pie',
+                    data: handSummaryData,
+                    options: { responsive: false }
+                });
+                
+    
+                new Chart(document.getElementById('freqPreview').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: fullLabels,
+                        datasets: [{
+                            label: 'Frecuencia',
+                            data: fullFreqData,
+                            borderColor: 'blue',
+                            fill: false,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+                
+                new Chart(document.getElementById('profPreview').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: fullLabels,
+                        datasets: [{
+                            label: 'Profundidad',
+                            data: fullProfData,
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+                
+            }
+        });
+        
     }
+    
+    
+    
 
     function toggleCharts() {
         isPaused = !isPaused;
