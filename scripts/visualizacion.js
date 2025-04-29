@@ -283,7 +283,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `,
             width: 800,
-            confirmButtonText: 'OK',
+            confirmButtonText: 'Nueva Maniobra',
+            denyButtonText: 'Cerrar',
+        
             didOpen: () => {
                 // Renderizar los gráficos en los canvas del pop-up
                 new Chart(document.getElementById('piePreview').getContext('2d'), {
@@ -336,7 +338,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
             }
+
+            
+        }).then((result) => {
+            if (result.isConfirmed) {
+                resetCharts(); // Comienza una nueva maniobra
+            } else {
+                window.close(); // Cierra la ventana si es una ventana secundaria
+                // Alternativamente, puedes ocultar contenido si no puedes cerrar
+                // document.getElementById('contenido').style.display = 'none';
+            }
         });
+        
         
     }
     

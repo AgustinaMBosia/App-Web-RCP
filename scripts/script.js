@@ -115,6 +115,7 @@ document.getElementById('simulateButton').addEventListener('click', () => {
         clearInterval(simulationInterval);
         simulationInterval = null;
         alert('Simulación detenida.');
+        simulateButton.textContent = "Simular Trama";
     } else {
         simulationInterval = setInterval(() => {
             const simulatedData = generateSimulatedData();
@@ -122,7 +123,9 @@ document.getElementById('simulateButton').addEventListener('click', () => {
         }, 500);
         alert('Simulación iniciada.');
         openVisualizationPage();
+        simulateButton.textContent = "⏸ Pausar simulación";
     }
+    
 });
 
 //Generar datos simulados
@@ -176,16 +179,19 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 case 'IDLE':
                     if (data.includes("hola")) {
                         sendToModule("ok");
-                    }
-                    else{
                         currentState = 'WAIT_CONFIRMATION';
                     }
                     break;
-                
+
                 case 'WAIT_CONFIRMATION':
-                    if (data.includes("ok recibe")){
+                    if (data.includes("ok recibe")) {
                         sendToModule("enviar manos");
                         currentState = 'WAIT_HANDS';
+                    } else {
+                        if (data === previousSerialData) {
+                            console.log("Reintentando enviar ok...");
+                            sendToModule("ok");
+                        }
                     }
                     break;
 
@@ -193,9 +199,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     if (data.includes("manos ok")) {
                         console.log("Manos recibidas.");
                         currentState = 'SEND_DATA';
-
                     } else {
-                        // Reintentar pedir manos si no cambió el dato
                         if (data === previousSerialData) {
                             console.log("Reintentando enviar manos...");
                             sendToModule("enviar manos");
@@ -204,21 +208,23 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     break;
 
                 case 'SEND_DATA':
-                    if(previousSerialData !== data){
-                        processData(data)
+                    if (previousSerialData !== data) {
+                        processData(data);
                         setTimeout(() => sendToModule("enviar datos"), 1000);
                     }
 
-                    if(data.includes("buddyFINISH")){
-                        currentState = 'FINISH'
+                    if (data.includes("buddyFINISH")) {
+                        currentState = 'FINISH';
                     }
                     break;
+
                 case 'FINISH':
-                    currentState = 'IDLE'
+                    currentState = 'IDLE';
                     break;
             }
 
         }, 100);
+
 
         alert('Conexión Serial establecida.');
         openVisualizationPage();
