@@ -237,6 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
         handPositionHistory.length = 0;
 
         localStorage.setItem("serialCommand", "reiniciar");
+        
+        recordedData.length = 0;
+
         updateCharts();
     }
 
@@ -283,8 +286,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `,
             width: 800,
+            showdenyButton : true,
             confirmButtonText: 'Nueva Maniobra',
-            denyButtonText: 'Cerrar',
+            cancelButtonText: 'Cerrar',
         
             didOpen: () => {
                 // Renderizar los gráficos en los canvas del pop-up
