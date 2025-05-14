@@ -146,25 +146,108 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         serialReader = serialPort.readable.getReader();
         const decoder = new TextDecoder("utf-8", { stream: true });
         let buffer = "";
-
+/*
         async function readSerialData() {
             while (serialPort && serialReader) {
                 const { value, done } = await serialReader.read();
                 if (done) break;
 
-                const text = decoder.decode(value, { stream: true });
-                buffer += text;
-                let lines = buffer.split("\n");
-                buffer = lines.pop();
+                // Decodifica cada byte individualmente
+                for (let i = 0; i < value.length; i++) {
+                    const char = String.fromCharCode(value[i]);
+                    buffer += char;
 
-                for (let line of lines) {
-                    line = line.replace(/\r/g, "").trim();
-                    console.log("Línea procesada:", line);
-                    previousSerialData = lastSerialData;
-                    lastSerialData = line;
+                    if (char === '\n') {
+                        let line = buffer.replace(/\r/g, "").trim();
+                        console.log("Línea procesada:", line);
+
+                        previousSerialData = lastSerialData;
+                        lastSerialData = line;
+
+                        buffer = ""; // Reinicia el buffer después de procesar una línea
+                    }
                 }
             }
         }
+        // dir destino (1 byte), dummy (1 byte), dir destino (2 byte), dir origen (2 bytes), comando(1 bytes), data (8 bytes), chk(1 byte),<cr>
+*/
+        async function readSerialData() {
+            const buffer = [];
+            
+            while (serialPort && serialReader) {
+                const { value, done } = await serialReader.read();
+                if (done) break;
+
+                for (let i = 0; i < value.length; i++) {
+                    const byte = value[i];
+
+                    if (byte === 0x0D) { // Fin de trama
+                        if (buffer.length === 17) { // Esperamos 17 bytes antes del CR
+                            const packet = new Uint8Array(buffer);
+
+                            const checksum = packet[16]; // último byte antes del CR
+                            const calculatedChecksum = calculateChecksum(packet.slice(0, 16)); // sin el checksum
+
+                            if (checksum === calculatedChecksum) {
+                                processPacket(packet);
+                            } else {
+                                console.warn("Checksum inválido:", checksum, "≠", calculatedChecksum);
+                            }
+                        } else {
+                            console.warn("Trama de longitud inesperada:", buffer.length);
+                        }
+
+                        buffer.length = 0; // Limpiar buffer
+                    } else {
+                        buffer.push(byte);
+                    }
+                }
+            }
+        }
+
+        function calculateChecksum(data) {
+            // Ejemplo: suma simple de bytes, ajustá esto si usás otro algoritmo
+            let sum = 0;
+            for (const b of data) {
+                sum = (sum + b) & 0xFF; // mantener en 8 bits
+            }
+            return sum;
+        }
+
+        function processPacket(packet) {
+            const dirDestino1 = packet[0];
+            const dummy1 = packet[1];
+            const dirDestino2 = (packet[2] << 8) | packet[3];
+            const dummy2 = packet[4];
+            const dirOrigen = (packet[5] << 8) | packet[6];
+            const comando = packet[7];
+            const data = packet.slice(8, 16);
+            const checksum = packet[16];
+
+            // Si esperás texto:
+            const dataStr = String.fromCharCode(...data);
+
+            // Si esperás número de 8 bytes:
+            let dataNumber = 0;
+            for (let i = 0; i < data.length; i++) {
+                dataNumber = (dataNumber << 8n) | BigInt(data[i]);
+            }
+
+            const parsedPacket = {
+                dirDestino1,
+                dummy1,
+                dirDestino2,
+                dummy2,
+                dirOrigen,
+                comando,
+                data: dataStr,  // o data: dataNumber
+                checksum
+            };
+
+            console.log("Trama procesada:", parsedPacket);
+        }
+
+    
 
         readSerialData();
 
