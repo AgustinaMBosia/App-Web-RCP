@@ -90,19 +90,52 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
-async function sendToModule(message) {
+async function sendFrame({
+    idDestino,
+    idPag,
+    idOrigen,
+    comando,
+    data // Array de 8 bytes
+}) {
     if (!serialPort) {
         console.error("❌ No hay conexión serial activa.");
         return;
     }
+
+    // Validaciones básicas
+    if (!Array.isArray(data) || data.length !== 8) {
+        console.error("❌ 'data' debe ser un array de 8 bytes.");
+        return;
+    }
+
     try {
-        const encoder = new TextEncoder();
+        // Construcción de la trama (sin checksum y CR todavía)
+        const frame = [
+            idDestino,         // dirección
+            0x00,              // dummy
+            idPag,             // IDpag
+            0x00,              // dummy
+            idDestino, 0x00,   // dir_destino (low, high)
+            idOrigen, 0x00,    // dir_origen (low, high)
+            comando,           // comando
+            ...data            // 8 bytes de datos
+        ];
+
+        // Calcular checksum (los primeros 17 bytes)
+        const checksum = calculateChecksum(frame);
+        frame.push(checksum);
+
+        // Agregar CR (0x0D)
+        frame.push(0x0D);
+
+        // Enviar
         const writer = serialPort.writable.getWriter();
-        await writer.write(encoder.encode(message + "\n"));
+        await writer.write(new Uint8Array(frame));
         writer.releaseLock();
-        console.log(`✅ Mensaje enviado: ${message}`);
+
+        console.log(`✅ Trama enviada: ${frame.map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
     } catch (error) {
-        console.error("❌ Error al enviar mensaje:", error);
+        console.error("❌ Error al enviar la trama:", error);
     }
 }
 
@@ -206,23 +239,35 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         }
 
         function calculateChecksum(data) {
-            // Ejemplo: suma simple de bytes, ajustá esto si usás otro algoritmo
             let sum = 0;
+
+            // 1. Sumar todos los bytes
             for (const b of data) {
-                sum = (sum + b) & 0xFF; // mantener en 8 bits
+                sum += b;
             }
+
+            // 2. Reducir la suma a 8 bits sumando los bytes altos y bajos
+            while (sum > 0xFF) {
+                sum = (sum & 0xFF) + (sum >> 8);
+            }
+
+            // 3. Complemento bit a bit
+            sum = ~sum & 0xFF;
+
             return sum;
         }
+
 
         function processPacket(packet) {
             const dirDestino1 = packet[0];
             const dummy1 = packet[1];
-            const dirDestino2 = (packet[2] << 8) | packet[3];
-            const dummy2 = packet[4];
-            const dirOrigen = (packet[5] << 8) | packet[6];
-            const comando = packet[7];
-            const data = packet.slice(8, 16);
-            const checksum = packet[16];
+            const IDpaq = packet[2]
+            const dummy2 = packet[3];
+            const dirDestino2 = (packet[4] << 8) | packet[5];
+            const dirOrigen = (packet[6] << 8) | packet[7];
+            const comando = packet[8];
+            const data = packet.slice(9,17);
+            const checksum = packet[18];
 
             // Si esperás texto:
             const dataStr = String.fromCharCode(...data);
@@ -236,8 +281,9 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             const parsedPacket = {
                 dirDestino1,
                 dummy1,
-                dirDestino2,
+                IDpaq,
                 dummy2,
+                dirDestino2,
                 dirOrigen,
                 comando,
                 data: dataStr,  // o data: dataNumber
@@ -252,54 +298,48 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         readSerialData();
 
         serialInterval = setInterval(() => {
-            if (!lastSerialData) return;
-
+            
             console.log(`Estado actual: ${currentState}`);
-            const data = lastSerialData;
-            lastSerialData = null; // Limpiar para esperar el próximo mensaje
-
+            
             switch (currentState) {
                 case 'IDLE':
-                    if (data.includes("hola")) {
-                        sendToModule("ok");
+                    if (comando == 101) {
+                        sendToModule("002");
                         currentState = 'WAIT_CONFIRMATION';
                     }
                     break;
 
                 case 'WAIT_CONFIRMATION':
-                    if (data.includes("ok recibe")) {
-                        sendToModule("enviar manos");
+                    if (comando == 102) {
+                        sendToModule("003");
                         currentState = 'WAIT_HANDS';
                     } else {
-                        if (data === previousSerialData) {
-                            console.log("Reintentando enviar ok...");
-                            sendToModule("ok");
+                        if (comando == 101) {
+                            console.log("Reintentando enviar 002...");
+                            sendToModule("002");
                         }
                     }
                     break;
 
                 case 'WAIT_HANDS':
-                    if (data.includes("manos ok")) {
+                    if (comando == 113) {
                         console.log("Manos recibidas.");
-                        currentState = 'SEND_DATA';
+                        currentState = '004';
                     } else {
-                        if (data === previousSerialData) {
+                        if (comando == 102) {
                             console.log("Reintentando enviar manos...");
-                            sendToModule("enviar manos");
+                            sendToModule("003");
                         }
                     }
                     break;
 
                 case 'SEND_DATA':
-                    if (previousSerialData !== data) {
+                    if (comando == 104) {
                         processData(data);
-                        setTimeout(() => sendToModule("enviar datos"), 1000);
+                        sendToModule('004');
                     }
 
-                    if (data.includes("buddyFINISH")) {
-                        currentState = 'FINISH';
-                    }
-                    break;
+                    setTimeout(()=>sendToModule('005'),10000)
 
                 case 'FINISH':
                     currentState = 'IDLE';
