@@ -307,7 +307,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             switch (currentState) {
                 case 'IDLE':
                     if (comando == 101) {
-                        sendToModule({idDestino,idPag,idOrigen,002,data});
+                        comando="002";
+                        sendToModule({idDestino,idPag,idOrigen,comando,data});
                         currentState = 'WAIT_CONFIRMATION';
                     }
                     break;
