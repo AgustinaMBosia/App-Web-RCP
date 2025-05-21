@@ -16,6 +16,8 @@ let handsFlag = false;
 
 let currentState = 'IDLE';
 
+let contadorUniversal = 0;
+
 
 const receivedDataElement = document.getElementById('receivedData');
 
@@ -49,7 +51,7 @@ function processData(data) {
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
         localStorage.setItem('updateTime', new Date().toISOString());
         
-        sendToModule("enviar datos");
+        //sendToModule("enviar datos");
 
     } else {
         console.warn('Trama inválida o no procesada:', data);
@@ -90,7 +92,7 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
-async function sendFrame({
+async function sendToModule({
     idDestino,
     idPag,
     idOrigen,
@@ -109,6 +111,7 @@ async function sendFrame({
     }
 
     try {
+        if (idPag==0x00) idPag=contadorUniversal++
         // Construcción de la trama (sin checksum y CR todavía)
         const frame = [
             idDestino,         // dirección
@@ -304,7 +307,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             switch (currentState) {
                 case 'IDLE':
                     if (comando == 101) {
-                        sendToModule("002");
+                        sendToModule({idDestino,idPag,idOrigen,002,data});
                         currentState = 'WAIT_CONFIRMATION';
                     }
                     break;
