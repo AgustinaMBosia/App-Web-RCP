@@ -303,52 +303,76 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         serialInterval = setInterval(() => {
             
             console.log(`Estado actual: ${currentState}`);
-            
+        
             switch (currentState) {
+
                 case 'IDLE':
-                    if (comando == 101) {
-                        comando="002";
+                    comando = 0x01;
+                    sendToModule({idDestino,idPag,idOrigen,comando,data})
+                    currentState = 'START'
+                    break;
+
+                case 'START':
+                    if (comando == 0x65) {
+                        comando=0x02;
                         sendToModule({idDestino,idPag,idOrigen,comando,data});
                         currentState = 'WAIT_CONFIRMATION';
+                    }
+                    else {
+                        console.log("Intentado conectar...");
+                        comando = 0x01
+                        sendToModule({idDestino,idPag,idOrigen,comando,data})
                     }
                     break;
 
                 case 'WAIT_CONFIRMATION':
-                    if (comando == 102) {
-                        sendToModule("003");
+                    if (comando == 0x66) { // 102
+                        comando = 0x03
+                        sendToModule({idDestino,idPag,idOrigen,comando,data});
                         currentState = 'WAIT_HANDS';
                     } else {
-                        if (comando == 101) {
+                        if (comando == 0x65) {// 101
                             console.log("Reintentando enviar 002...");
-                            sendToModule("002");
+                            comando = 0x02
+                            sendToModule({idDestino,idPag,idOrigen,comando,data});
                         }
                     }
                     break;
 
                 case 'WAIT_HANDS':
-                    if (comando == 113) {
-                        console.log("Manos recibidas.");
-                        currentState = '004';
+                    if (comando == 0x66 && data == 0x71) {// 102
+                        currentState = 'SEND_DATA';
+                    
                     } else {
-                        if (comando == 102) {
+                        if (comando == 0x66) {
                             console.log("Reintentando enviar manos...");
-                            sendToModule("003");
+                            comando = 0x03
+                            sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
                         }
                     }
                     break;
 
                 case 'SEND_DATA':
-                    if (comando == 104) {
+                    if (comando == 0x68) { // 104
                         processData(data);
-                        sendToModule('004');
+                        comando = 0x04
+                        sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
                     }
 
-                    setTimeout(()=>sendToModule('005'),10000)
+                    setTimeout(()=>{
+                        currentState == 'FINISH';
+                        comando = 0x05
+                        sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
+                    },10000)
 
                 case 'FINISH':
-                    currentState = 'IDLE';
+                    if (comando == 0xFF){ //255
+                        console.log("finalizado correctamente")
+                        currentState = 'IDLE';
+                    }
                     break;
             }
+
 
         }, 100);
 
