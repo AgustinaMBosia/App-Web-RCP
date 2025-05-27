@@ -205,8 +205,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 }
             }
         }
-        // dir destino (1 byte), dummy (1 byte), dir destino (2 byte), dir origen (2 bytes), comando(1 bytes), data (8 bytes), chk(1 byte),<cr>
-*/
+        */
         async function readSerialData() {
             const buffer = [];
             
@@ -218,11 +217,11 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     const byte = value[i];
 
                     if (byte === 0x0D) { // Fin de trama
-                        if (buffer.length === 17) { // Esperamos 17 bytes antes del CR
+                        if (buffer.length === 18) { // Esperamos 18 bytes antes del CR
                             const packet = new Uint8Array(buffer);
 
-                            const checksum = packet[16]; // último byte antes del CR
-                            const calculatedChecksum = calculateChecksum(packet.slice(0, 16)); // sin el checksum
+                            const checksum = packet[17]; // último byte antes del CR
+                            const calculatedChecksum = calculateChecksum(packet.slice(0, 17)); // sin el checksum
 
                             if (checksum === calculatedChecksum) {
                                 processPacket(packet);
@@ -270,7 +269,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             const dirOrigen = (packet[6] << 8) | packet[7];
             const comando = packet[8];
             const data = packet.slice(9,17);
-            const checksum = packet[18];
+            const checksum = packet[17];
 
             // Si esperás texto:
             const dataStr = String.fromCharCode(...data);
@@ -340,7 +339,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     break;
 
                 case 'WAIT_HANDS':
-                    if (comando == 0x66 && data == 0x71) {// 102
+                    if (comando == 0x66 && data[0] === 0x71) {// 102
                         currentState = 'SEND_DATA';
                     
                     } else {
@@ -360,10 +359,11 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     }
 
                     setTimeout(()=>{
-                        currentState == 'FINISH';
+                        currentState = 'FINISH';
                         comando = 0x05
                         sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
                     },10000)
+                    break;
 
                 case 'FINISH':
                     if (comando == 0xFF){ //255
