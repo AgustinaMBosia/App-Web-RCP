@@ -18,6 +18,11 @@ let currentState = 'IDLE';
 
 let contadorUniversal = 0;
 
+let idDestino = 0x00;
+let idPag = 0x00;
+let idOrigen = 0x00;
+let comando = 0x00;
+let data = new Array(8).fill(0x00);
 
 const receivedDataElement = document.getElementById('receivedData');
 
@@ -99,6 +104,24 @@ async function sendToModule({
     comando,
     data // Array de 8 bytes
 }) {
+    function calculateChecksum(data) {
+            let sum = 0;
+
+            // 1. Sumar todos los bytes
+            for (const b of data) {
+                sum += b;
+            }
+
+            // 2. Reducir la suma a 8 bits sumando los bytes altos y bajos
+            while (sum > 0xFF) {
+                sum = (sum & 0xFF) + (sum >> 8);
+            }
+
+            // 3. Complemento bit a bit
+            sum = ~sum & 0xFF;
+
+            return sum;
+        }
     if (!serialPort) {
         console.error("❌ No hay conexión serial activa.");
         return;
@@ -111,7 +134,7 @@ async function sendToModule({
     }
 
     try {
-        if (idPag==0x00) idPag=contadorUniversal++
+        if (idPag==0x00) idPag=0x00
         // Construcción de la trama (sin checksum y CR todavía)
         const frame = [
             idDestino,         // dirección
@@ -180,32 +203,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         await serialPort.open({ baudRate: 9600 });
 
         serialReader = serialPort.readable.getReader();
-        const decoder = new TextDecoder("utf-8", { stream: true });
-        let buffer = "";
-/*
-        async function readSerialData() {
-            while (serialPort && serialReader) {
-                const { value, done } = await serialReader.read();
-                if (done) break;
 
-                // Decodifica cada byte individualmente
-                for (let i = 0; i < value.length; i++) {
-                    const char = String.fromCharCode(value[i]);
-                    buffer += char;
-
-                    if (char === '\n') {
-                        let line = buffer.replace(/\r/g, "").trim();
-                        console.log("Línea procesada:", line);
-
-                        previousSerialData = lastSerialData;
-                        lastSerialData = line;
-
-                        buffer = ""; // Reinicia el buffer después de procesar una línea
-                    }
-                }
-            }
-        }
-        */
         async function readSerialData() {
             const buffer = [];
             
@@ -231,7 +229,6 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                         } else {
                             console.warn("Trama de longitud inesperada:", buffer.length);
                         }
-
                         buffer.length = 0; // Limpiar buffer
                     } else {
                         buffer.push(byte);
@@ -263,118 +260,110 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         function processPacket(packet) {
             const dirDestino1 = packet[0];
             const dummy1 = packet[1];
-            const IDpaq = packet[2]
+            const IDpaq = packet[2];
             const dummy2 = packet[3];
             const dirDestino2 = (packet[4] << 8) | packet[5];
             const dirOrigen = (packet[6] << 8) | packet[7];
-            const comando = packet[8];
-            const data = packet.slice(9,17);
+            const receivedComando = packet[8];
+            const receivedData = packet.slice(9, 17);
             const checksum = packet[17];
 
             // Si esperás texto:
-            const dataStr = String.fromCharCode(...data);
+            const dataStr = String.fromCharCode(...receivedData);
 
             // Si esperás número de 8 bytes:
-            let dataNumber = 0;
-            for (let i = 0; i < data.length; i++) {
-                dataNumber = (dataNumber << 8n) | BigInt(data[i]);
+            let dataNumber = 0n;
+            for (let i = 0; i < receivedData.length; i++) {
+                dataNumber = (dataNumber << 8n) | BigInt(receivedData[i]);
             }
 
-            const parsedPacket = {
-                dirDestino1,
-                dummy1,
-                IDpaq,
-                dummy2,
-                dirDestino2,
-                dirOrigen,
-                comando,
-                data: dataStr,  // o data: dataNumber
-                checksum
-            };
+            // Actualizamos variables globales con lo recibido
+            comando = receivedComando;
+            data = Array.from(receivedData);
+            idPag = IDpaq;
+            idOrigen = packet[6];  // solo low byte
+            idDestino = dirDestino1;
 
-            console.log("Trama procesada:", parsedPacket);
+            // Mostrar todo en consola
+            console.log("✅ Trama recibida:");
+            console.log(`📦 IDpaq: ${IDpaq}`);
+            console.log(`📍 Origen: 0x${dirOrigen.toString(16).padStart(4, '0')}`);
+            console.log(`📍 Destino: 0x${dirDestino2.toString(16).padStart(4, '0')}`);
+            console.log(`🔧 Comando: 0x${receivedComando.toString(16).padStart(2, '0')}`);
+            console.log(`📊 Data: [${receivedData.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
+            console.log(`🧮 Checksum: 0x${checksum.toString(16).padStart(2, '0')}`);
         }
+
 
     
 
         readSerialData();
 
-        serialInterval = setInterval(() => {
-            
-            console.log(`Estado actual: ${currentState}`);
-        
-            switch (currentState) {
 
-                case 'IDLE':
-                    comando = 0x01;
+        serialInterval = setInterval(() => {
+            //cambiar a case con el comando
+            
+            console.log('El comando es: ',comando);
+        
+            switch (comando) {
+
+                case 0x01:
                     sendToModule({idDestino,idPag,idOrigen,comando,data})
                     currentState = 'START'
                     break;
 
-                case 'START':
+                case 0x65:
+                    console.log('el comando es: ',comando)
                     if (comando == 0x65) {
-                        comando=0x02;
-                        sendToModule({idDestino,idPag,idOrigen,comando,data});
+                        sendToModule({idDestino,idPag,idOrigen,comando:0x02,data});
                         currentState = 'WAIT_CONFIRMATION';
                     }
                     else {
                         console.log("Intentado conectar...");
-                        comando = 0x01
-                        sendToModule({idDestino,idPag,idOrigen,comando,data})
+                        sendToModule({idDestino, idPag, idOrigen, comando: 0x01, data})
                     }
                     break;
 
-                case 'WAIT_CONFIRMATION':
-                    if (comando == 0x66) { // 102
-                        comando = 0x03
-                        sendToModule({idDestino,idPag,idOrigen,comando,data});
+                case 0x66:
+                    if (comando == 0x66 && data[0] != 0x71) { // 102
+                        sendToModule({idDestino,idPag,idOrigen,comando:0x03,data});
                         currentState = 'WAIT_HANDS';
-                    } else {
-                        if (comando == 0x65) {// 101
-                            console.log("Reintentando enviar 002...");
-                            comando = 0x02
-                            sendToModule({idDestino,idPag,idOrigen,comando,data});
-                        }
-                    }
-                    break;
+                    } 
 
-                case 'WAIT_HANDS':
-                    if (comando == 0x66 && data[0] === 0x71) {// 102
+                    if (comando == 0x66 && data[0] === 0x71) {// 102 y 113
                         currentState = 'SEND_DATA';
+                        sendToModule({idDestino,idPag,idOrigen,comando:0x03,data}); // poner bien la direccion de destino
                     
-                    } else {
-                        if (comando == 0x66) {
-                            console.log("Reintentando enviar manos...");
-                            comando = 0x03
-                            sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
-                        }
-                    }
+                    } 
+
                     break;
 
-                case 'SEND_DATA':
+                case 0x68:
                     if (comando == 0x68) { // 104
                         processData(data);
-                        comando = 0x04
-                        sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
+                        sendToModule({idDestino,idPag,idOrigen,comando:0x04,data});
                     }
 
                     setTimeout(()=>{
                         currentState = 'FINISH';
-                        comando = 0x05
-                        sendToModule({dirDestino1,IDpaq,dirOrigen,comando,data});
-                    },10000)
+                        sendToModule({idDestino,idPag,idOrigen,comando:0x05,data});
+                    },10000) // cambiar a un minuto
                     break;
 
-                case 'FINISH':
+                case 0xFF:
                     if (comando == 0xFF){ //255
                         console.log("finalizado correctamente")
                         currentState = 'IDLE';
                     }
                     break;
+                default:
+                    comando=0x01;
+                    break;
+
             }
 
 
-        }, 100);
+        }, 10000);
 
 
         alert('Conexión Serial establecida.');
