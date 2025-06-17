@@ -1,4 +1,7 @@
-let simulationInterval = null; 
+
+
+// Variables globales
+let simulationInterval = null;
 let bluetoothInterval = null;
 let serialInterval = null;
 
@@ -31,20 +34,19 @@ function openVisualizationPage() {
 }
 
 // PROCESAR DATOS
-function processData(data) { // Eliminar caracteres \r y espacios extra
-
-    const regex = /U(OK|NOK),P(\d+),F(\d+):/; // Ajuste de la regex
+function processData(data) {
+    data = data.replace(/\r/g, "").trim();
+    const regex = /U(OK|NOK),P(\d+),F(\d+):/;
     const match = data.match(regex);
 
     if (match) {
         const [_, handPosition, profundidad, freq] = match;
-        
+
         receivedDataElement.textContent = `
             Posición de la Mano: ${handPosition}
             Profundidad: ${profundidad}
             Frecuencia: ${freq}
         `;
-
 
         const processedData = {
             handPosition,
@@ -54,13 +56,11 @@ function processData(data) { // Eliminar caracteres \r y espacios extra
 
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
         localStorage.setItem('updateTime', new Date().toISOString());
-        
-        //sendToModule("enviar datos");
-
     } else {
         console.warn('Trama inválida o no procesada:', data);
     }
 }
+
 function processSensorData(sensorBytes) {
     const manoOK = sensorBytes[0] === 1 ? 'OK' : 'NOK';
     const profundidad = sensorBytes[1] | (sensorBytes[2] << 8);
@@ -104,7 +104,6 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
         await characteristic.startNotifications();
         alert('Conexión Bluetooth establecida.');
 
-        // Intervalo para actualizar datos Bluetooth
         bluetoothInterval = setInterval(() => {
             if (lastBluetoothData) {
                 processData(lastBluetoothData);
@@ -119,64 +118,32 @@ document.getElementById('bluetoothButton').addEventListener('click', async () =>
     }
 });
 
-async function sendToModule({
-    idDestino,
-    idPag,
-    idOrigen,
-    comando,
-    data // Array de 8 bytes
-}) {
+async function sendToModule({ idDestino,idPag,idOrigen, comando, data }) {
     function calculateChecksum(data) {
-            let sum = 0;
-
-            // 1. Sumar todos los bytes
-            for (const b of data) {
-                sum += b;
-            }
-
-            // 2. Reducir la suma a 8 bits sumando los bytes altos y bajos
-            while (sum > 0xFF) {
-                sum = (sum & 0xFF) + (sum >> 8);
-            }
-
-            // 3. Complemento bit a bit
-            sum = ~sum & 0xFF;
-
-            return sum;
-        }
-    if (!serialPort) {
-        console.error("❌ No hay conexión serial activa.");
-        return;
+        let sum = 0;
+        for (const b of data) sum += b;
+        while (sum > 0xFF) sum = (sum & 0xFF) + (sum >> 8);
+        return (~sum) & 0xFF;
     }
 
-    // Validaciones básicas
-    if (!Array.isArray(data) || data.length !== 8) {
-        console.error("❌ 'data' debe ser un array de 8 bytes.");
-        return;
-    }
+    if (!serialPort) return console.error("❌ No hay conexión serial activa.");
+    if (!Array.isArray(data) || data.length !== 8) return console.error("❌ 'data' debe ser un array de 8 bytes.");
 
     try {
         if (idPag === 0x00) idPag = contadorUniversal++;
-        // Construcción de la trama (sin checksum y CR todavía)
+
         const frame = [
-            idDestino,         // dirección
-            0x00,              // dummy
-            idPag,             // IDpag
-            0x00,              // dummy
-            idDestino, 0x00,   // dir_destino (low, high)
-            idOrigen, 0x00,    // dir_origen (low, high)
-            comando,           // comando
-            ...data            // 8 bytes de datos
+            idDestino, 0x00, idPag, 0x00,
+            idDestino, 0x00,
+            idOrigen, 0x00,
+            comando,
+            ...data
         ];
 
-        // Calcular checksum (los primeros 17 bytes)
         const checksum = calculateChecksum(frame);
         frame.push(checksum);
-
-        // Agregar CR (0x0D)
         frame.push(0x0D);
 
-        // Enviar
         const writer = serialPort.writable.getWriter();
         await writer.write(new Uint8Array(frame));
         writer.releaseLock();
@@ -187,16 +154,12 @@ async function sendToModule({
     }
 }
 
-// const systemTime = new Date(); PARA SACAR TIEMPO DE COMPUTADORA
-
-
 // SIMULACIÓN
 document.getElementById('simulateButton').addEventListener('click', () => {
     if (simulationInterval) {
         clearInterval(simulationInterval);
         simulationInterval = null;
         alert('Simulación detenida.');
-        simulateButton.textContent = "Simular Trama";
     } else {
         simulationInterval = setInterval(() => {
             const simulatedData = generateSimulatedData();
@@ -204,12 +167,9 @@ document.getElementById('simulateButton').addEventListener('click', () => {
         }, 500);
         alert('Simulación iniciada.');
         openVisualizationPage();
-        simulateButton.textContent = "⏸ Pausar simulación";
     }
-    
 });
 
-//Generar datos simulados
 function generateSimulatedData() {
     const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
     const profundidad = Math.floor(Math.random() * 10);
@@ -217,31 +177,26 @@ function generateSimulatedData() {
     return `\nU${handPosition},P${profundidad},F${freq}:`;
 }
 
-
 // CONEXIÓN SERIAL
 document.getElementById('serialButton').addEventListener('click', async () => {
     try {
         serialPort = await navigator.serial.requestPort();
         await serialPort.open({ baudRate: 9600 });
 
-        serialReader = serialPort.readable.getReader();
+        const serialReader = serialPort.readable.getReader();
+        const buffer = [];
 
         async function readSerialData() {
-            const buffer = [];
-            
             while (serialPort && serialReader) {
                 const { value, done } = await serialReader.read();
                 if (done) break;
 
-                for (let i = 0; i < value.length; i++) {
-                    const byte = value[i];
-
-                    if (byte === 0x0D) { // Fin de trama
-                        if (buffer.length === 18) { // Esperamos 18 bytes antes del CR
+                for (const byte of value) {
+                    if (byte === 0x0D) {
+                        if (buffer.length === 18) {
                             const packet = new Uint8Array(buffer);
-
-                            const checksum = packet[17]; // último byte antes del CR
-                            const calculatedChecksum = calculateChecksum(packet.slice(0, 17)); // sin el checksum
+                            const checksum = packet[17];
+                            const calculatedChecksum = calculateChecksum(packet.slice(0, 17));
 
                             if (checksum === calculatedChecksum) {
                                 processPacket(packet);
@@ -251,7 +206,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                         } else {
                             console.warn("Trama de longitud inesperada:", buffer.length);
                         }
-                        buffer.length = 0; // Limpiar buffer
+                        buffer.length = 0;
                     } else {
                         buffer.push(byte);
                     }
@@ -261,130 +216,55 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
         function calculateChecksum(data) {
             let sum = 0;
-
-            // 1. Sumar todos los bytes
-            for (const b of data) {
-                sum += b;
-            }
-
-            // 2. Reducir la suma a 8 bits sumando los bytes altos y bajos
-            while (sum > 0xFF) {
-                sum = (sum & 0xFF) + (sum >> 8);
-            }
-
-            // 3. Complemento bit a bit
-            sum = ~sum & 0xFF;
-
-            return sum;
+            for (const b of data) sum += b;
+            while (sum > 0xFF) sum = (sum & 0xFF) + (sum >> 8);
+            return (~sum) & 0xFF;
         }
-
 
         function processPacket(packet) {
             const dirDestino1 = packet[0];
-            const dummy1 = packet[1];
             const IDpaq = packet[2];
-            const dummy2 = packet[3];
-            const dirDestino2 = (packet[4] << 8) | packet[5];
-            const dirOrigen = (packet[6] << 8) | packet[7];
+            const dirOrigen = packet[6];
             const receivedComando = packet[8];
             const receivedData = packet.slice(9, 17);
-            const checksum = packet[17];
 
-            // Si esperás texto:
-            const dataStr = String.fromCharCode(...receivedData);
-
-            // Si esperás número de 8 bytes:
-            let dataNumber = 0n;
-            for (let i = 0; i < receivedData.length; i++) {
-                dataNumber = (dataNumber << 8n) | BigInt(receivedData[i]);
-            }
-
-            // Actualizamos variables globales con lo recibido
             comando = receivedComando;
             data = Array.from(receivedData);
             idPag = IDpaq;
-            idOrigen = packet[6];  // solo low byte
+            idOrigen = packet[6];
             idDestino = dirDestino1;
 
-            // Mostrar todo en consola
             console.log("✅ Trama recibida:");
             console.log(`📦 IDpaq: ${IDpaq}`);
             console.log(`📍 Origen: 0x${dirOrigen.toString(16).padStart(4, '0')}`);
-            console.log(`📍 Destino: 0x${dirDestino2.toString(16).padStart(4, '0')}`);
             console.log(`🔧 Comando: 0x${receivedComando.toString(16).padStart(2, '0')}`);
             console.log(`📊 Data: [${receivedData.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
-            console.log(`🧮 Checksum: 0x${checksum.toString(16).padStart(2, '0')}`);
         }
-
-
-    
 
         readSerialData();
 
-
         serialInterval = setInterval(() => {
-            //cambiar a case con el comando
-            
-            console.log('El comando es: ',comando);
-        
-            switch (comando) {
+            console.log('El comando es: ', comando);
 
+            switch (comando) {
                 case 0x01:
-                    sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data})
-                    currentState = 'START'
-                    console.log('el estado actual es: ', currentState);
-                    console.log('el comando actual es: ', comando);
+                    sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando, data });
+                    currentState = 'START';
                     break;
 
                 case 0x65:
-                    console.log('el comando es: ',comando)
-                    contadorUniversal++;
-                    
-                    if (comando == 0x65) {
-                        sendToModule({idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x02,data});
-                        currentState = 'WAIT_CONFIRMATION';
-                        contadorUniversal++;
-                    }
-                    else {
-                        console.log("Intentado conectar...");
-                        sendToModule({idDestino:0x64, idPag, idOrigen:0x01, comando: 0x01, data})
-                    }
-                    console.log('el estado actual es: ', currentState);
-                    contadorUniversal++;
+                    sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando: 0x02, data });
+                    currentState = 'WAIT_CONFIRMATION';
                     break;
 
                 case 0x66:
-                    if (comando == 0x66 && data[0] != 0x71) { // 102
-                        sendToModule({idDestino:0x64,idPag,idOrigen:0x01,comando:0x03,data});
+                    if (data[0] !== 0x71) {
+                        sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando: 0x03, data });
                         currentState = 'WAIT_HANDS';
-                        console.log('el estado actual es: ', currentState);
-                    } 
-
-                    if (comando == 0x66 && data[0] === 0x71) {// 102 y 113
+                    } else {
                         currentState = 'SEND_DATA';
-                        sendToModule({idDestino:0x64,idPag,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino
-                    
-                    } 
-
-                    break;
-
-                    /*  PARA EL MARTES QUE VIENE: 
-                        - HAY QUE PASAR NOSOTROS DEL SEND_DATA AL 0X68 QUE ES EL QUE PIDE LOS DATOS DEL SENSOR. 
-                        POR AHORA SE ME HIZO LA HORA PERO ENTRA UNA VEZ EN EL SEND_DATA, PIDE INFO, LA PROCESA Y VUELVE AL SEND_DATA (NO TIENE QUE HACER ESO)
-                        
-                        HAY QUE VER UNA FORMA DE QUE SE MANDE PERMANENTEMENTE AL OX68 LUEGO DE QUE CONFIRME EL SEND DATA
-
-                    */
-
-                case 0x03:
-                    if (comando == 0x03) { // 102
-                        currentState = 'SEND_DATA';
-                        data[0]= 0x71;
-                        sendToModule({idDestino:0x64,idPag,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino;
+                        sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando: 0x03, data });
                     }
-
-                    comando = 0x68;
-
                     break;
 
                 case 0x68:
@@ -394,24 +274,18 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                         currentState = 'FINISH';
                         sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando: 0x05, data });
                     }, 60000);
-
                     break;
 
                 case 0xFF:
-                    if (comando == 0xFF){ //255
-                        console.log("finalizado correctamente")
-                        currentState = 'IDLE';
-                    }
+                    console.log("finalizado correctamente");
+                    currentState = 'IDLE';
                     break;
+
                 default:
-                    comando=0x01;
+                    comando = 0x01;
                     break;
-
             }
-
-
         }, 10000);
-
 
         alert('Conexión Serial establecida.');
         openVisualizationPage();
