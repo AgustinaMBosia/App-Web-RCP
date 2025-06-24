@@ -24,6 +24,8 @@ let idOrigen = 0x00;
 let comando = 0x00;
 let data = new Array(8).fill(0x00);
 
+let flagSendData = false;
+
 const receivedDataElement = document.getElementById('receivedData');
 
 function openVisualizationPage() {
@@ -323,6 +325,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
 
         serialInterval = setInterval(() => {
+            contadorUniversal++;
             //cambiar a case con el comando
             
             console.log('El comando es: ',comando);
@@ -347,7 +350,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     }
                     else {
                         console.log("Intentado conectar...");
-                        sendToModule({idDestino:0x64, idPag, idOrigen:0x01, comando: 0x01, data})
+                        sendToModule({idDestino:0x64, idPag: contadorUniversal, idOrigen:0x01, comando: 0x01, data})
                     }
                     console.log('el estado actual es: ', currentState);
                     contadorUniversal++;
@@ -355,45 +358,39 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
                 case 0x66:
                     if (comando == 0x66 && data[0] != 0x71) { // 102
-                        sendToModule({idDestino:0x64,idPag,idOrigen:0x01,comando:0x03,data});
+                        sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data});
                         currentState = 'WAIT_HANDS';
                         console.log('el estado actual es: ', currentState);
                     } 
 
                     if (comando == 0x66 && data[0] === 0x71) {// 102 y 113
                         currentState = 'SEND_DATA';
-                        sendToModule({idDestino:0x64,idPag,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino
+                        sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino
                     
                     } 
 
-                    break;
-
-                    /*  PARA EL MARTES QUE VIENE: 
-                        - HAY QUE PASAR NOSOTROS DEL SEND_DATA AL 0X68 QUE ES EL QUE PIDE LOS DATOS DEL SENSOR. 
-                        POR AHORA SE ME HIZO LA HORA PERO ENTRA UNA VEZ EN EL SEND_DATA, PIDE INFO, LA PROCESA Y VUELVE AL SEND_DATA (NO TIENE QUE HACER ESO)
-                        
-                        HAY QUE VER UNA FORMA DE QUE SE MANDE PERMANENTEMENTE AL OX68 LUEGO DE QUE CONFIRME EL SEND DATA
-
+                    /*
+                    PONER ACA UN APARTADO PARA MANEJAR QUE CARGA UTIL VALGA 0XFF PARA TERMINAR LA MANIOBRA
                     */
 
-                case 0x03:
-                    if (comando == 0x03) { // 102
-                        currentState = 'SEND_DATA';
-                        data[0]= 0x71;
-                        sendToModule({idDestino:0x64,idPag,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino;
-                    }
-
-                    comando = 0x68;
-
                     break;
 
-                case 0x68:
-                    processSensorData(data);  
-                    sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando: 0x04, data });
-                    setTimeout(() => {
+                case 0x03:
+                    if (!flagSendData) { // 102
+                        currentState = 'SEND_DATA';
+                        data[0]= 0x71;
+                        sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino;
+                        flagSendData = true;
+                    }else{
+                        if (currentState != 'FINISH'){
+                        processSensorData(data);  
+                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
+                        }
+                        setTimeout(() => {
                         currentState = 'FINISH';
-                        sendToModule({ idDestino: 0x64,idPag,idOrigen:0x01, comando: 0x05, data });
-                    }, 60000);
+                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
+                        }, 60000);
+                    }
 
                     break;
 
@@ -410,7 +407,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             }
 
 
-        }, 10000);
+        }, 1000);
 
 
         alert('Conexión Serial establecida.');
