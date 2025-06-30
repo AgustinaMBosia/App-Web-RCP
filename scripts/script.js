@@ -21,10 +21,11 @@ let contadorUniversal = 0;
 let idDestino = 0x00;
 let idPag = 0x00;
 let idOrigen = 0x00;
-let comando = 0x00;
+let comando = 0x01;
 let data = new Array(8).fill(0x00);
 
 let flagSendData = false;
+let sendDataFlag = false;
 
 const receivedDataElement = document.getElementById('receivedData');
 
@@ -307,6 +308,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             idPag = IDpaq;
             idOrigen = packet[6];  // solo low byte
             idDestino = dirDestino1;
+            sendDataFlag = packet[14];
 
             // Mostrar todo en consola
             console.log("✅ Trama recibida:");
@@ -316,6 +318,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             console.log(`🔧 Comando: 0x${receivedComando.toString(16).padStart(2, '0')}`);
             console.log(`📊 Data: [${receivedData.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
             console.log(`🧮 Checksum: 0x${checksum.toString(16).padStart(2, '0')}`);
+            console.log(`Bandera de sendData: 0x${sendDataFlag.toString(16).padStart(4, '0')}`);
         }
 
 
@@ -329,6 +332,14 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             //cambiar a case con el comando
             
             console.log('El comando es: ',comando);
+
+            /*
+                if (localStorage.getItem('serialCommand') = "terminar"){
+                currentState = 'FINISH';
+                sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
+            }*/
+
+            
         
             switch (comando) {
 
@@ -363,29 +374,39 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                         console.log('el estado actual es: ', currentState);
                     } 
 
-                    if (comando == 0x66 && data[0] === 0x71) {// 102 y 113
+                    if (comando == 0x66 && data[0] == 0x71 ) {// 102 y 113
+                        data[0] = 0x71
+                        sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data});
                         currentState = 'SEND_DATA';
                         sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino
                     
                     } 
 
-                    /*
-                    PONER ACA UN APARTADO PARA MANEJAR QUE CARGA UTIL VALGA 0XFF PARA TERMINAR LA MANIOBRA
-                    */
+                    if (comando == 0x66 && data[0] == 0xFF ) {
+                        console.log("finalizado correctamente")
+                        currentState = 'IDLE';
+                    }
 
                     break;
 
                 case 0x03:
                     if (!flagSendData) { // 102
-                        currentState = 'SEND_DATA';
-                        data[0]= 0x71;
-                        sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino;
-                        flagSendData = true;
+
+                        data[0] = 0x71
+                        if (contadorUniversal % 2 == 0)sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data});
+                        if (contadorUniversal % 2 != 0)sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
+                        
+                        if (data[5] == 0x01){
+                            currentState = 'SEND_DATA';
+                            flagSendData = true;
+                        }
+                        
                     }else{
-                        if (currentState != 'FINISH'){
+                        if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
                         processSensorData(data);  
                         sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
                         }
+
                         setTimeout(() => {
                         currentState = 'FINISH';
                         sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
@@ -394,14 +415,20 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
                     break;
 
-                case 0xFF:
-                    if (comando == 0xFF){ //255
-                        console.log("finalizado correctamente")
-                        currentState = 'IDLE';
-                    }
-                    break;
+                case 0x68:
+                     if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
+                        processSensorData(data);  
+                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
+                        }
+
+                        setTimeout(() => {
+                        currentState = 'FINISH';
+                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
+                        comando = 0x01;
+                     }, 60000);
+                    
                 default:
-                    comando=0x01;
+                    // comando=0x01;
                     break;
 
             }

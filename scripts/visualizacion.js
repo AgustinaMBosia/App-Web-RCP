@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const fullProfData = [];
     const fullLabels = [];
 
-
     let recordedData = []; // Array que guardará todos los datos de la maniobra
 
     const handPositionHistory = [];
@@ -252,8 +251,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     
         localStorage.setItem('realTimeData', JSON.stringify(data));
-        localStorage.setItem("serialCommand", "terminar");
-    
+        localStorage.setItem('serialCommand', "terminar");
+
         downloadCSV(); // Exporta los datos como CSV
     
         const correct = pieData.datasets[0].data[0];
@@ -269,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             datasets: [{
             data: [handOKCount, handNotOKCount],
             backgroundColor: ['green', 'red']
-        }]
+    }]
 };
 
     
