@@ -390,7 +390,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     break;
 
                 case 0x03:
-                    if (!flagSendData) { // 102
+                    if (!flagSendData) { // 102  hacemos aknowledge de la respuesta y empezamos a pedir datos del sensor
 
                         data[0] = 0x71
                         if (contadorUniversal % 2 == 0)sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data});
