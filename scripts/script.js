@@ -26,6 +26,8 @@ let data = new Array(8).fill(0x00);
 
 let flagSendData = false;
 let sendDataFlag = false;
+let flagCambio = true;
+let count=0;
 
 const receivedDataElement = document.getElementById('receivedData');
 
@@ -352,19 +354,19 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
                 case 0x65: //buddy responde con el id
                     console.log('el comando es: ',comando)
-                    contadorUniversal++; //este contador lo usamos para el id de cada paquete
+                    //este contador lo usamos para el id de cada paquete
                     
                     if (comando == 0x65) {
                         sendToModule({idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x02,data}); //enviamos el req de inicio
                         currentState = 'WAIT_CONFIRMATION';
-                        contadorUniversal++;
+                        
                     }
                     else {
                         console.log("Intentado conectar...");
                         sendToModule({idDestino:0x64, idPag: contadorUniversal, idOrigen:0x01, comando: 0x01, data})
                     }
                     console.log('el estado actual es: ', currentState);
-                    contadorUniversal++;
+                    
                     break;
 
                 case 0x66: //recibimos el ack de el inicio con caga util 
@@ -390,31 +392,60 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     break;
 
                 case 0x03:
-                    if (!flagSendData) { // 102  hacemos aknowledge de la respuesta y empezamos a pedir datos del sensor
-
-                        data[0] = 0x71 // velidez de trama para el aknowledge de hands_ok
-                        if (contadorUniversal % 2 == 0)sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data}); // este es el aknowledge del hands ok
-                        if (contadorUniversal % 2 != 0)sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data }); // pedimos una trama para fijarnos en el data[5]
-                        
-
-                        if (data[5] == 0x01){ // en ese espacio esta implementada una flag para cuando la trama de datos de sensores es válida
-                            currentState = 'SEND_DATA';
-                            flagSendData = true; 
+                    if (!flagSendData) {
+                        if (flagCambio || count<3) {
+                            data[0] = 0x71; // ack
+                            sendToModule({
+                                idDestino: 0x64,
+                                idPag: contadorUniversal,
+                                idOrigen: 0x01,
+                                comando: 0x66,
+                                data
+                            });
+                            flagCambio = false;
+                            count++;
+                        } else {
+                            sendToModule({
+                                idDestino: 0x64, 
+                                idPag: contadorUniversal,
+                                idOrigen: 0x01,
+                                comando: 0x04,
+                                data
+                            });
+                            flagCambio = true;
+                            count=0;
                         }
-                        
-                    }else{
-                        if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
-                        processSensorData(data);  
-                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
+
+                        if (data[5] === 0x01) {
+                            currentState = 'SEND_DATA';
+                            flagSendData = true;
+                        }
+
+                    } else {
+                        if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
+                            processSensorData(data);
+                            sendToModule({
+                                idDestino: 0x64,
+                                idPag: contadorUniversal,
+                                idOrigen: 0x01,
+                                comando: 0x04,
+                                data
+                            });
                         }
 
                         setTimeout(() => {
-                        currentState = 'FINISH';
-                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
+                            currentState = 'FINISH';
+                            sendToModule({
+                                idDestino: 0x64,
+                                idPag: contadorUniversal,
+                                idOrigen: 0x01,
+                                comando: 0x05,
+                                data
+                            });
                         }, 60000);
                     }
-
                     break;
+
 
                 case 0x68:
                      if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
