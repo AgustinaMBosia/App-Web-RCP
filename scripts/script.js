@@ -394,13 +394,14 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                 case 0x03:
                     if (!flagSendData) { // 102  hacemos aknowledge de la respuesta y empezamos a pedir datos del sensor
 
-                        data[0] = 0x71
-                        if (contadorUniversal % 2 == 0)sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data});
-                        if (contadorUniversal % 2 != 0)sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
+                        data[0] = 0x71 // velidez de trama para el aknowledge de hands_ok
+                        if (contadorUniversal % 2 == 0)sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data}); // este es el aknowledge del hands ok
+                        if (contadorUniversal % 2 != 0)sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data }); // pedimos una trama para fijarnos en el data[5]
                         
-                        if (data[5] == 0x01){
+
+                        if (data[5] == 0x01){ // en ese espacio esta implementada una flag para cuando la trama de datos de sensores es válida
                             currentState = 'SEND_DATA';
-                            flagSendData = true;
+                            flagSendData = true; 
                         }
                         
                     }else{
