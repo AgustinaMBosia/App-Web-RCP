@@ -343,19 +343,19 @@ document.getElementById('serialButton').addEventListener('click', async () => {
         
             switch (comando) {
 
-                case 0x01:
-                    sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data})
+                case 0x01:  //la variable comando esta inicializada como 0x01 entonces siempre entra a este case primero
+                    sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data}) //mandamos al buddy el comando 0x01
                     currentState = 'START'
                     console.log('el estado actual es: ', currentState);
                     console.log('el comando actual es: ', comando);
                     break;
 
-                case 0x65:
+                case 0x65: //buddy responde con el id
                     console.log('el comando es: ',comando)
-                    contadorUniversal++;
+                    contadorUniversal++; //este contador lo usamos para el id de cada paquete
                     
                     if (comando == 0x65) {
-                        sendToModule({idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x02,data});
+                        sendToModule({idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x02,data}); //enviamos el req de inicio
                         currentState = 'WAIT_CONFIRMATION';
                         contadorUniversal++;
                     }
@@ -367,7 +367,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     contadorUniversal++;
                     break;
 
-                case 0x66:
+                case 0x66: //recibimos el ack de el inicio con caga util 
                     if (comando == 0x66 && data[0] != 0x71) { // 102
                         sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data});
                         currentState = 'WAIT_HANDS';
