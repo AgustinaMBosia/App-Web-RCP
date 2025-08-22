@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const profIdealMin = 5;
     const profIdealMax = 6;
 
+    // let finish = false;
+
     const dataLocal = localStorage.getItem('realTimeData') || '{}';
 
     const freqData = {
@@ -145,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const freq = parsedData.freq || 0;
             const prof = parsedData.profundidad || 0;
             const handPos = parsedData.handPosition || 'N/A';
+            //finish = (localStorage.getItem("terminar"));
 
             // Si la posición de manos es "OK", permitimos el registro de datos
             if (handPos === "OK") {
@@ -238,8 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         handPositionHistory.length = 0;
 
-        localStorage.setItem("serialCommand", "reiniciar");
-        
+        // localStorage.setItem("serialCommand", "reiniciar");
+        //localStorage.setItem("terminar", false);
         recordedData.length = 0;
 
         updateCharts();
@@ -254,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     
         localStorage.setItem('realTimeData', JSON.stringify(data));
-        localStorage.setItem('serialCommand', "terminar");
+        localStorage.setItem("terminar", true);
 
         downloadCSV(); // Exporta los datos como CSV
     
@@ -271,8 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
             datasets: [{
             data: [handOKCount, handNotOKCount],
             backgroundColor: ['green', 'red']
-    }]
-};
+            }]
+        };
 
     
         // Crear una copia de los gráficos en una ventana modal
@@ -288,10 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `,
             width: 800,
-            showdenyButton : true,
-            confirmButtonText: 'Nueva Maniobra',
-            cancelButtonText: 'Cerrar',
-        
+                showConfirmButton: true,
+                showDenyButton: true,  
+                confirmButtonText: 'Nueva Maniobra',
+                denyButtonText: 'Cerrar',
+                    
             didOpen: () => {
                 // Renderizar los gráficos en los canvas del pop-up
                 new Chart(document.getElementById('piePreview').getContext('2d'), {
@@ -342,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         scales: { y: { beginAtZero: true } }
                     }
                 });
-                
+            
             }
 
             
@@ -350,13 +354,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result.isConfirmed) {
                 resetCharts(); // Comienza una nueva maniobra
             } else {
+                //localStorage.setItem("terminar", false);
                 window.close(); // Cierra la ventana si es una ventana secundaria
                 // Alternativamente, puedes ocultar contenido si no puedes cerrar
                 // document.getElementById('contenido').style.display = 'none';
             }
         });
-        
-        
     }
     
 
@@ -365,9 +368,16 @@ document.addEventListener('DOMContentLoaded', () => {
         playStopButton.textContent = isPaused ? "⏵ Play" : "⏸ Pause";
     }
 
+    if (playStopButton) {
     playStopButton.addEventListener('click', toggleCharts);
-    resetButton.addEventListener('click', resetCharts);
-    saveButton.addEventListener('click', saveCharts);
+    }
+    if (resetButton) {
+        resetButton.addEventListener('click', resetCharts);
+    }
+    if (saveButton) {
+        saveButton.addEventListener('click', saveCharts);
+    }
+
 
     setInterval(() => {
         dataLocal = localStorage.getItem('realTimeData') || '{}';
@@ -393,6 +403,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 Swal.close(); // Cierra el pop-up
                 clearInterval(checkVariable); // Detiene el intervalo
             }
+            if (finish){
+                
+            }
+        
         }, 100); // Revisa cada 500ms
     }
 

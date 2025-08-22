@@ -462,7 +462,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                     currentState = 'FINISH';
                     sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
                     comando = 0x01;
-                    localStorage.setItem("finish", 0 );
+                    localStorage.setItem("terminar", true);
 
                     }, 60000);
 
