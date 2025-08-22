@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const profIdealMin = 5;
     const profIdealMax = 6;
 
+    const dataLocal = localStorage.getItem('realTimeData') || '{}';
+
     const freqData = {
         labels: [],
         datasets: [{
@@ -210,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             receivedDataElement.innerHTML = 'Error al mostrar los datos.';
         }
     }
+    
 
 
     function resetCharts() {
@@ -356,8 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
     }
     
-    
-    
 
     function toggleCharts() {
         isPaused = !isPaused;
@@ -369,9 +370,12 @@ document.addEventListener('DOMContentLoaded', () => {
     saveButton.addEventListener('click', saveCharts);
 
     setInterval(() => {
-        const data = localStorage.getItem('realTimeData') || '{}';
-        updateVisualization(data);
-    }, 1000);
+        dataLocal = localStorage.getItem('realTimeData') || '{}';
+    }, 100);
+
+    setInterval(() => {
+        updateVisualization(dataLocal);
+    }, 200);
 
     startTracking = false; // Variable que controlará el cierre del pop-up
 
@@ -389,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 Swal.close(); // Cierra el pop-up
                 clearInterval(checkVariable); // Detiene el intervalo
             }
-        }, 500); // Revisa cada 500ms
+        }, 100); // Revisa cada 500ms
     }
 
 

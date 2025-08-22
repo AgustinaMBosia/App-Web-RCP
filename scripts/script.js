@@ -12,6 +12,8 @@ let freq = null;
 
 let serialPort= null;
 
+let visualizationWindow = null;
+
 let handsFlag = false;
 
 let currentState = 'IDLE';
@@ -89,6 +91,7 @@ function processSensorData(sensorBytes) {
     }));
     localStorage.setItem('updateTime', new Date().toISOString());
 }
+
 
 // CONEXIÓN BLUETOOTH
 document.getElementById('bluetoothButton').addEventListener('click', async () => {
@@ -336,9 +339,11 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             console.log('El comando es: ',comando);
 
             /*
+            
                 if (localStorage.getItem('serialCommand') = "terminar"){
                 currentState = 'FINISH';
                 sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
+
             }*/
 
             
@@ -453,12 +458,16 @@ document.getElementById('serialButton').addEventListener('click', async () => {
                         sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
                         }
 
-                        setTimeout(() => {
-                        currentState = 'FINISH';
-                        sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
-                        comando = 0x01;
-                     }, 60000);
-                    
+                    setTimeout(() => {
+                    currentState = 'FINISH';
+                    sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
+                    comando = 0x01;
+                    localStorage.setItem("finish", 0 );
+
+                    }, 60000);
+
+                    break;
+                
                 default:
                     // comando=0x01;
                     break;
@@ -466,7 +475,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             }
 
 
-        }, 1000);
+        }, 500);
 
 
         alert('Conexión Serial establecida.');
