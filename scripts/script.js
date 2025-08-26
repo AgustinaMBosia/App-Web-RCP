@@ -34,7 +34,39 @@ let count=0;
 const receivedDataElement = document.getElementById('receivedData');
 
 function openVisualizationPage() {
-    window.open('visualization.html', '_blank');
+    visualizationWindow = window.open('visualization.html', '_blank');
+    
+    // Limpiar la referencia cuando se cierre la ventana
+    if (visualizationWindow) {
+        visualizationWindow.addEventListener('beforeunload', () => {
+            visualizationWindow = null;
+        });
+    }
+}
+
+async function closeSerialConnection() {
+    try {
+        if (serialReader) {
+            await serialReader.cancel();   // Cancela la lectura activa
+            serialReader.releaseLock();    // Libera el reader
+            serialReader = null;
+        }
+
+        if (serialPort) {
+            await serialPort.close();      // Cierra el puerto serial
+            serialPort = null;
+        }
+
+        if (serialInterval) {
+            clearInterval(serialInterval); // Detenemos el loop
+            serialInterval = null;
+        }
+
+        alert("Conexión Serial cerrada correctamente ✅");
+    } catch (error) {
+        console.error("❌ Error al cerrar el puerto serial:", error);
+        alert("Error al cerrar el puerto serial.");
+    }
 }
 
 // PROCESAR DATOS
@@ -52,13 +84,22 @@ function processData(data) { // Eliminar caracteres \r y espacios extra
             Frecuencia: ${freq}
         `;
 
-
         const processedData = {
             handPosition,
             profundidad: parseInt(profundidad, 10),
             freq: parseInt(freq, 10),
         };
 
+        // Enviar datos a la ventana de visualización usando postMessage
+        if (visualizationWindow && !visualizationWindow.closed) {
+            visualizationWindow.postMessage({
+                type: 'SENSOR_DATA',
+                data: processedData,
+                timestamp: new Date().toISOString()
+            }, '*');
+        }
+
+        // Mantener localStorage como fallback
         localStorage.setItem('realTimeData', JSON.stringify(processedData));
         localStorage.setItem('updateTime', new Date().toISOString());
         
@@ -84,11 +125,23 @@ function processSensorData(sensorBytes) {
         Frecuencia: ${frecuencia}
     `;
 
-    localStorage.setItem('realTimeData', JSON.stringify({
+    const processedData = {
         handPosition: manoOK,
         profundidad,
         freq: frecuencia
-    }));
+    };
+
+    // Enviar datos a la ventana de visualización usando postMessage
+    if (visualizationWindow && !visualizationWindow.closed) {
+        visualizationWindow.postMessage({
+            type: 'SENSOR_DATA',
+            data: processedData,
+            timestamp: new Date().toISOString()
+        }, '*');
+    }
+
+    // Mantener localStorage como fallback
+    localStorage.setItem('realTimeData', JSON.stringify(processedData));
     localStorage.setItem('updateTime', new Date().toISOString());
 }
 
@@ -453,16 +506,24 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
 
                 case 0x68:
-                     if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
+                    if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
                         processSensorData(data);  
                         sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
-                        }
+                    }
 
                     setTimeout(() => {
                     currentState = 'FINISH';
                     sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
                     comando = 0x01;
                     localStorage.setItem("terminar", true);
+
+                    // Notificar a la ventana de visualización que termine
+                    if (visualizationWindow && !visualizationWindow.closed) {
+                        visualizationWindow.postMessage({
+                            type: 'MANEUVER_FINISHED',
+                            timestamp: new Date().toISOString()
+                        }, '*');
+                    }
 
                     }, 60000);
 
@@ -475,7 +536,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
             }
 
 
-        }, 500);
+        }, 200);
 
 
         alert('Conexión Serial establecida.');

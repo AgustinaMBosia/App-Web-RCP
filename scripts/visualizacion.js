@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // let finish = false;
 
+    // Variable para almacenar los datos más recientes
+    let latestData = null;
+
     const dataLocal = localStorage.getItem('realTimeData') || '{}';
 
     const freqData = {
@@ -141,9 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateVisualization(data) {
         if (isPaused) return; // Ignorar datos mientras está en pausa
 
-
         try {
-            const parsedData = JSON.parse(data);
+            // Si data es un string, intentar parsearlo (fallback)
+            let parsedData = data;
+            if (typeof data === 'string') {
+                parsedData = JSON.parse(data);
+            }
+
             const freq = parsedData.freq || 0;
             const prof = parsedData.profundidad || 0;
             const handPos = parsedData.handPosition || 'N/A';
@@ -178,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
             fullFreqData.push(freq);
             fullProfData.push(prof);
 
-
             recordedData.push({
                 timestamp: new Date().toISOString(),
                 frecuencia: freq,
@@ -186,12 +192,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 posicionMano: handPos
             });
             
-
             const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
             const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
             const isHandOK = handPos === 'OK';
             handPositionHistory.push(handPos);
-
 
             if (isFreqCorrect && isProfCorrect && isHandOK) {
                 correctExecutions++;
@@ -352,14 +356,18 @@ document.addEventListener('DOMContentLoaded', () => {
             
         }).then((result) => {
             if (result.isConfirmed) {
-                resetCharts(); // Comienza una nueva maniobra
-            } else {
-                //localStorage.setItem("terminar", false);
-                window.close(); // Cierra la ventana si es una ventana secundaria
-                // Alternativamente, puedes ocultar contenido si no puedes cerrar
-                // document.getElementById('contenido').style.display = 'none';
+                // Usuario eligió "Nueva Maniobra"
+                resetCharts();
+                maneuverFinishedHandled = false; // listo para próxima maniobra
+            } else if (result.isDenied) {
+                // Usuario eligió "Cerrar"
+                window.close(); 
+            } else if (result.isDismissed) {
+                console.log("El usuario cerró el pop-up sin elegir opción.");
+                maneuverFinishedHandled = false; // también habilitamos próxima
             }
         });
+
     }
     
 
@@ -379,13 +387,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    setInterval(() => {
-        dataLocal = localStorage.getItem('realTimeData') || '{}';
-    }, 100);
+    // Listener para recibir datos via postMessage
+    let maneuverFinishedHandled = false; // flag para evitar múltiples llamados
 
+    window.addEventListener('message', (event) => {
+        // Verificar que el mensaje viene de la ventana principal
+        if (event.origin !== window.location.origin && event.origin !== 'null') {
+            return;
+        }
+
+        if (event.data && event.data.type === 'SENSOR_DATA') {
+            latestData = event.data.data;
+            updateVisualization(latestData);
+
+        } else if (event.data && event.data.type === 'MANEUVER_FINISHED') {
+            console.log('Maniobra finalizada recibida via postMessage');
+
+            if (!maneuverFinishedHandled) {   // solo ejecuta una vez
+                maneuverFinishedHandled = true;
+                saveCharts();
+            }
+        }
+    });
+
+
+    // Fallback: seguir leyendo localStorage por si acaso
     setInterval(() => {
-        updateVisualization(dataLocal);
-    }, 200);
+        if (!latestData) {
+            const dataLocal = localStorage.getItem('realTimeData') || '{}';
+            try {
+                const parsedData = JSON.parse(dataLocal);
+                if (parsedData && Object.keys(parsedData).length > 0) {
+                    updateVisualization(parsedData);
+                }
+            } catch (error) {
+                console.warn('Error parsing localStorage data:', error);
+            }
+        }
+    }, 1000); // Reducido a 1 segundo como fallback
 
     startTracking = false; // Variable que controlará el cierre del pop-up
 
