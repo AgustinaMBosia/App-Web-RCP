@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HC-05 Communication</title>
     <link rel="stylesheet" href="estilos/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="scripts/chart.umd.js"></script>
 </head>
 <body>
     <img src="estilos/ucc_logo_png_fdb20f633a.png" alt="Marca de agua" class="watermark">
@@ -13,11 +15,29 @@
         <button id="bluetoothButton">Conectar vía Bluetooth</button>
         <button id="serialButton">Conectar vía Serial</button>
         <button id="simulateButton">Simular Trama</button>
+        <button id="saveButton">Terminar</button>
     </div>
     <div id="output">
         <h2>Datos Recibidos:</h2>
         <p id="receivedData">Ningún dato recibido aún</p>
     </div>
+
+    <div class="chart-container">
+        <div>
+            <canvas id="freqChart" width="300" height="150"></canvas>
+        </div>
+        <div>
+            <canvas id="profChart" width="300" height="150"></canvas>
+        </div>
+        <div>
+            <canvas id="pieChart" width="200" height="200"></canvas>
+        </div>
+        <div>
+            <canvas id="handPosChart" width="200" height="200"></canvas>
+        </div>
+    </div>
+
+    <script src="scripts/visualizacion.js"></script>
     <script src="scripts/script.js"></script>
 </body>
 </html>
