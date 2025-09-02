@@ -464,6 +464,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 						sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
 						comando = 0x01;
 						// Notificar fin en la misma pestaña si es necesario
+						
 					}, 60000);
 
 					break;
