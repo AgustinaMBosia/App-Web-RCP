@@ -97,9 +97,21 @@ document.addEventListener('DOMContentLoaded', () => {
 	const freqChart = new Chart(freqCtx, {
 		type: 'line',
 		data: freqData,
-		options: { responsive: true, plugins: { legend: { position: 'top' } } },
+		options: { 
+			responsive: true, 
+			plugins: { 
+				legend: { position: 'top' } 
+			},
+			scales: {
+				y: {
+					min: 0,
+					max: 210
+				}
+			}
+		},
 		plugins: [rangePlugin]
 	});
+
 
 	const profChart = new Chart(profCtx, {
 		type: 'bar',
@@ -239,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		}).then((result) => {
 			if (result.isConfirmed) {
 				resetCharts();
+				// -----------------------aca poner que saque la coneccxion se serial
 			}
 		});
 	}
@@ -251,6 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (playStopButton) playStopButton.addEventListener('click', toggleCharts);
 	if (resetButton) resetButton.addEventListener('click', resetCharts);
 	if (saveButton) saveButton.addEventListener('click', saveCharts);
+
+	// Expose saveCharts globally so other scripts can trigger the popup
+	window.saveCharts = saveCharts;
 
 	function handleDataForVisualization(parsedData) {
 		if (isPaused) return;
@@ -330,4 +346,25 @@ document.addEventListener('DOMContentLoaded', () => {
 			if (receivedDataElement) receivedDataElement.innerHTML = 'Error al mostrar los datos.';
 		}
 	};
+
+	function abrirPopup() {
+        Swal.fire({
+            title: "Esperando...",
+            text: "El pop-up se cerrará cuando ponga bien la mano.",
+            icon: "info",
+            showConfirmButton: false
+        });
+
+        // Revisar periódicamente si cerrarPopup es true
+        const checkVariable = setInterval(() => {
+            if (startTracking) {
+                Swal.close(); // Cierra el pop-up
+                clearInterval(checkVariable); // Detiene el intervalo
+            }
+            if (finish){
+                
+            }
+        
+        }, 100); // Revisa cada 500ms
+    }
 });

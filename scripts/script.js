@@ -20,6 +20,43 @@ let currentState = 'IDLE';
 
 let contadorUniversal = 0;
 
+// Single-shot finish scheduling to avoid repeated popups
+let finishTimeoutId = null;
+let finishScheduled = false;
+let finishPopupShown = false;
+
+function clearFinishSchedule() {
+	if (finishTimeoutId) {
+		clearTimeout(finishTimeoutId);
+		finishTimeoutId = null;
+	}
+	finishScheduled = false;
+}
+
+function scheduleFinishOnce() {
+	if (finishScheduled || finishPopupShown) return;
+	finishScheduled = true;
+	finishTimeoutId = setTimeout(() => {
+		if (currentState !== 'FINISH') {
+			currentState = 'FINISH';
+			sendToModule({
+				idDestino: 0x64,
+				idPag: contadorUniversal,
+				idOrigen: 0x01,
+				comando: 0x05,
+				data
+			});
+		}
+		if (!finishPopupShown && typeof window.saveCharts === 'function') {
+			finishPopupShown = true;
+			window.saveCharts();
+		}
+		comando = 0x01;
+		finishTimeoutId = null;
+		finishScheduled = false;
+	}, 60000);
+}
+
 let idDestino = 0x00;
 let idPag = 0x00;
 let idOrigen = 0x00;
@@ -354,6 +391,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 				case 0x01:  //la variable comando esta inicializada como 0x01 entonces siempre entra a este case primero
 					sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data}) //mandamos al buddy el comando 0x01
 					currentState = 'START'
+					finishPopupShown = false;
+					clearFinishSchedule();
 					console.log('el estado actual es: ', currentState);
 					console.log('el comando actual es: ', comando);
 					break;
@@ -380,6 +419,10 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 						sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data});
 						currentState = 'WAIT_HANDS';
 						console.log('el estado actual es: ', currentState);
+
+						if (typeof window.abrirPopup === 'function') {
+							window.abrirPopup();
+						}
 					} 
 
 					if (comando == 0x66 && data[0] == 0x71 ) {// 102 y 113
@@ -438,17 +481,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 								data
 							});
 						}
-
-						setTimeout(() => {
-							currentState = 'FINISH';
-							sendToModule({
-								idDestino: 0x64,
-								idPag: contadorUniversal,
-								idOrigen: 0x01,
-								comando: 0x05,
-								data
-							});
-						}, 60000);
+						scheduleFinishOnce();
 					}
 					break;
 
@@ -459,7 +492,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 						sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
 						}
 
-									setTimeout(() => {
+						setTimeout(() => {
 						currentState = 'FINISH';
 						sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
 						comando = 0x01;
@@ -485,5 +518,20 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 	} catch (error) {
 		console.error('Error en conexión Serial:', error);
 		alert('No se pudo conectar al dispositivo Serial.');
+	}
+});
+
+// Ensure manual finish clears timer and sends finish command once
+const manualFinishButton = document.getElementById('saveButton');
+if (manualFinishButton) manualFinishButton.addEventListener('click', () => {
+	clearFinishSchedule();
+	if (currentState !== 'FINISH') {
+		currentState = 'FINISH';
+		sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+	}
+	// Trigger popup when finishing manually, but only once
+	if (!finishPopupShown && typeof window.saveCharts === 'function') {
+		finishPopupShown = true;
+		window.saveCharts();
 	}
 });
