@@ -25,6 +25,8 @@ let finishTimeoutId = null;
 let finishScheduled = false;
 let finishPopupShown = false;
 
+let flagCierroPopup = false;
+
 function clearFinishSchedule() {
 	if (finishTimeoutId) {
 		clearTimeout(finishTimeoutId);
@@ -496,6 +498,10 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 						currentState = 'FINISH';
 						sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
 						comando = 0x01;
+						if (!flagCierroPopup) {
+							flagCierroPopup = true;
+							window.saveCharts();
+						} 
 						// Notificar fin en la misma pestaña si es necesario
 						
 					}, 60000);
