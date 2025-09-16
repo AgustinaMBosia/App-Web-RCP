@@ -239,8 +239,6 @@ async function sendToModule({
 	}
 }
 
-// const systemTime = new Date(); PARA SACAR TIEMPO DE COMPUTADORA
-
 
 // SIMULACIÓN
 document.getElementById('simulateButton').addEventListener('click', () => {
@@ -271,6 +269,166 @@ function generateSimulatedData() {
 
 
 // CONEXIÓN SERIAL
+function stopSerialLoop() {
+    if (serialInterval) {
+        clearInterval(serialInterval);
+        serialInterval = null;
+        console.log("⏸️ Loop de estados detenido.");
+    }
+}
+
+window.restartSerialLoop = function restartSerialLoop() {
+    if (!serialInterval) {
+        serialInterval = setInterval(() => {
+            contadorUniversal++;
+            console.log('El comando es: ', comando);
+			switch (comando) {
+
+				case 0x01:  //la variable comando esta inicializada como 0x01 entonces siempre entra a este case primero
+					sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data}) //mandamos al buddy el comando 0x01
+					currentState = 'START'
+					finishPopupShown = false;
+					clearFinishSchedule();
+					console.log('el estado actual es: ', currentState);
+					console.log('el comando actual es: ', comando);
+					break;
+
+				case 0x65: //buddy responde con el id
+					console.log('el comando es: ',comando)
+					//este contador lo usamos para el id de cada paquete
+					
+					if (comando == 0x65) {
+						sendToModule({idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x02,data}); //enviamos el req de inicio
+						currentState = 'WAIT_CONFIRMATION';
+						
+					}
+					else {
+						console.log("Intentado conectar...");
+						sendToModule({idDestino:0x64, idPag: contadorUniversal, idOrigen:0x01, comando: 0x01, data})
+					}
+					console.log('el estado actual es: ', currentState);
+					
+					break;
+
+				case 0x66: //recibimos el ack de el inicio con caga util 
+					if (comando == 0x66 && data[0] != 0x71) { // 102
+						sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data});
+						currentState = 'WAIT_HANDS';
+						console.log('el estado actual es: ', currentState);
+
+						abrirPopup(); // Abrir popup para manos
+					}
+
+					if (comando == 0x66 && data[0] == 0x71 ) {// 102 y 113
+						data[0] = 0x71
+						sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x66,data});
+						currentState = 'SEND_DATA';
+						sendToModule({idDestino:0x64,idPag:contadorUniversal,idOrigen:0x01,comando:0x03,data}); // poner bien la direccion de destino
+					
+					} 
+
+					if (comando == 0x66 && data[0] == 0xFF ) {
+						console.log("finalizado correctamente")
+						currentState = 'IDLE';
+					}
+
+					break;
+
+				case 0x03:
+					if (!flagSendData) {
+						if (flagCambio || count<3) {
+							data[0] = 0x71; // ack
+							sendToModule({
+								idDestino: 0x64,
+								idPag: contadorUniversal,
+								idOrigen: 0x01,
+								comando: 0x66,
+								data
+							});
+							flagCambio = false;
+							count++;
+						} else {
+							sendToModule({
+								idDestino: 0x64, 
+								idPag: contadorUniversal,
+								idOrigen: 0x01,
+								comando: 0x04,
+								data
+							});
+							flagCambio = true;
+							count=0;
+						}
+
+						if (data[5] === 0x01) {
+							currentState = 'SEND_DATA';
+							flagSendData = true;
+						}
+
+					} else {
+						if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
+							processSensorData(data);
+							sendToModule({
+								idDestino: 0x64,
+								idPag: contadorUniversal,
+								idOrigen: 0x01,
+								comando: 0x04,
+								data
+							});
+						}
+						scheduleFinishOnce();
+					}
+					break;
+
+
+				case 0x68:
+					if (currentState != 'FINISH' && (sendDataFlag == true || data[5] == 0x01)) {
+						processSensorData(data);  
+						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+					}
+
+					setTimeout(() => {
+						currentState = 'FINISH';
+						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+						if (!flagCierroPopup) {
+							flagCierroPopup = true;
+							window.saveCharts();
+						}
+
+						// detener el loop de estados
+						stopSerialLoop();
+					}, 60000);
+
+					break;
+
+				
+				default:
+					// comando=0x01;
+					break;
+
+			}
+        }, 500);
+        console.log("▶️ Loop de estados reiniciado.");
+    }
+}
+
+window.closeSerialConnection = async function closeSerialConnection() {
+    try {
+        stopSerialLoop(); // detener el loop si sigue corriendo
+        if (serialReader) {
+            await serialReader.cancel();
+            serialReader.releaseLock();
+            serialReader = null;
+        }
+        if (serialPort) {
+            await serialPort.close();
+            serialPort = null;
+        }
+        console.log("🔌 Conexión serial cerrada.");
+    } catch (err) {
+        console.error("❌ Error al cerrar la conexión serial:", err);
+    }
+};
+
 function abrirPopup() {
   if (handsPopupOpen) return;               // no abrir de nuevo si ya está abierto
   if (!window.Swal) {                       // por si SweetAlert2 no está cargado
@@ -301,7 +459,7 @@ function abrirPopup() {
     if (window.handsOk === true || currentState !== 'WAIT_HANDS') {
       Swal.close(); // dispara didClose arriba
     }
-  }, 120);
+  }, 80);
 }
 
 document.getElementById('serialButton').addEventListener('click', async () => {
@@ -524,24 +682,25 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 
 
 				case 0x68:
-					 if (currentState != 'FINISH' &&  (sendDataFlag==true || data[5] == 0x01)){
+					if (currentState != 'FINISH' && (sendDataFlag == true || data[5] == 0x01)) {
 						processSensorData(data);  
-						sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x04, data });
-						}
+						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+					}
 
-						setTimeout(() => {
+					setTimeout(() => {
 						currentState = 'FINISH';
-						sendToModule({ idDestino: 0x64,idPag:contadorUniversal,idOrigen:0x01, comando: 0x05, data });
-						comando = 0x01;
+						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
 						if (!flagCierroPopup) {
 							flagCierroPopup = true;
 							window.saveCharts();
-						} 
-						// Notificar fin en la misma pestaña si es necesario
-						
+						}
+
+						// detener el loop de estados
+						stopSerialLoop();
 					}, 60000);
 
 					break;
+
 				
 				default:
 					// comando=0x01;

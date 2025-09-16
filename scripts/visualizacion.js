@@ -249,11 +249,17 @@ document.addEventListener('DOMContentLoaded', () => {
 				});
 			}
 		}).then((result) => {
-			if (result.isConfirmed) {
-				resetCharts();
-				// -----------------------aca poner que saque la coneccxion se serial
+		if (result.isConfirmed) {
+			resetCharts();
+			window.restartSerialLoop();
+			
+		} else if (result.isDenied) {
+			if (typeof window.closeSerialConnection === 'function') {
+				window.closeSerialConnection();
 			}
-		});
+		}
+	});
+
 	}
 
 	function toggleCharts() {
@@ -346,25 +352,4 @@ document.addEventListener('DOMContentLoaded', () => {
 			if (receivedDataElement) receivedDataElement.innerHTML = 'Error al mostrar los datos.';
 		}
 	};
-
-	function abrirPopup() {
-        Swal.fire({
-            title: "Esperando...",
-            text: "El pop-up se cerrará cuando ponga bien la mano.",
-            icon: "info",
-            showConfirmButton: false
-        });
-
-        // Revisar periódicamente si cerrarPopup es true
-        const checkVariable = setInterval(() => {
-            if (startTracking) {
-                Swal.close(); // Cierra el pop-up
-                clearInterval(checkVariable); // Detiene el intervalo
-            }
-            if (finish){
-                
-            }
-        
-        }, 100); // Revisa cada 500ms
-    }
 });
