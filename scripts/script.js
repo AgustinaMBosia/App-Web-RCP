@@ -19,6 +19,10 @@ let handsFlag = false;
 let currentState = 'IDLE';
 
 let contadorUniversal = 0;
+let handsPopupShown = false;
+window.handsOk = false;           // flag global que vamos a ir actualizando
+let handsPopupOpen = false;       // evita múltiples popups
+let handsPopupIntervalId = null;  // para cortar el polling al cerrar
 
 // Single-shot finish scheduling to avoid repeated popups
 let finishTimeoutId = null;
@@ -72,10 +76,6 @@ let count=0;
 
 const receivedDataElement = document.getElementById('receivedData');
 
-function openVisualizationPage() {
-	// Integrado en index, no abrir nueva ventana
-}
-
 // PROCESAR DATOS
 function processData(data) { // Eliminar caracteres \r y espacios extra
 
@@ -84,6 +84,7 @@ function processData(data) { // Eliminar caracteres \r y espacios extra
 
 	if (match) {
 		const [_, handPosition, profundidad, freq] = match;
+		window.handsOk = (handPosition === 'OK');
 		
 		receivedDataElement.textContent = `
 			Posición de la Mano: ${handPosition}
@@ -110,6 +111,8 @@ function processSensorData(sensorBytes) {
 	const profundidad = sensorBytes[1] | (sensorBytes[2] << 8);
 	const frecuencia = sensorBytes[3] | (sensorBytes[4] << 8);
 
+	window.handsOk = (manoOK === 'OK');
+
 	console.log("📥 Datos decodificados:");
 	console.log("🤚 Mano:", manoOK);
 	console.log("📏 Profundidad:", profundidad);
@@ -130,6 +133,7 @@ function processSensorData(sensorBytes) {
 	if (typeof window.updateVisualization === 'function') {
 		window.updateVisualization(processedData);
 	}
+
 }
 
 
@@ -267,6 +271,39 @@ function generateSimulatedData() {
 
 
 // CONEXIÓN SERIAL
+function abrirPopup() {
+  if (handsPopupOpen) return;               // no abrir de nuevo si ya está abierto
+  if (!window.Swal) {                       // por si SweetAlert2 no está cargado
+    console.warn('SweetAlert2 no está disponible');
+    return;
+  }
+
+  handsPopupOpen = true;
+
+  Swal.fire({
+    title: "Poner bien las manos",
+    text: "El pop-up se cerrará cuando pongas bien la mano.",
+    icon: "info",
+    showConfirmButton: false,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    didClose: () => {
+      handsPopupOpen = false;
+      if (handsPopupIntervalId) {
+        clearInterval(handsPopupIntervalId);
+        handsPopupIntervalId = null;
+      }
+    }
+  });
+
+  // Poll: cerrar cuando la mano esté OK o si salimos de WAIT_HANDS
+  handsPopupIntervalId = setInterval(() => {
+    if (window.handsOk === true || currentState !== 'WAIT_HANDS') {
+      Swal.close(); // dispara didClose arriba
+    }
+  }, 120);
+}
+
 document.getElementById('serialButton').addEventListener('click', async () => {
 	try {
 		serialPort = await navigator.serial.requestPort();
@@ -422,10 +459,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 						currentState = 'WAIT_HANDS';
 						console.log('el estado actual es: ', currentState);
 
-						if (typeof window.abrirPopup === 'function') {
-							window.abrirPopup();
-						}
-					} 
+						abrirPopup(); // Abrir popup para manos
+					}
 
 					if (comando == 0x66 && data[0] == 0x71 ) {// 102 y 113
 						data[0] = 0x71
