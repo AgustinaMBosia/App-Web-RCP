@@ -176,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
 	function saveCharts() {
+		console.log('saveCharts() called — session:', window.sessionId);
 		downloadCSV();
 
 		const correct = pieData.datasets[0].data[0];
@@ -249,17 +250,22 @@ document.addEventListener('DOMContentLoaded', () => {
 				});
 			}
 		}).then((result) => {
-		if (result.isConfirmed) {
-			resetCharts();
-			window.restartSerialLoop();
-			
-		} else if (result.isDenied) {
-			if (typeof window.closeSerialConnection === 'function') {
-				window.closeSerialConnection();
+			if (result.isConfirmed) {
+				// Reiniciar gráficos y todos los estados para nueva maniobra
+				resetCharts();
+				console.log("🔄 Iniciando nueva maniobra...");
+				// invalidar timeouts/handlers pendientes de la sesión anterior
+				window.sessionId = (window.sessionId || 0) + 1;
+				// ahora sí permitimos futuros popups para la NUEVA sesión
+				window.finishPopupShown = false;
+				window.restartSerialLoop();
+				
+			} else if (result.isDenied) {
+				if (typeof window.closeSerialConnection === 'function') {
+					window.closeSerialConnection();
+				}
 			}
-		}
-	});
-
+		});
 	}
 
 	function toggleCharts() {

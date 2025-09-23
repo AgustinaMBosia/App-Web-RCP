@@ -24,12 +24,15 @@ window.handsOk = false;           // flag global que vamos a ir actualizando
 let handsPopupOpen = false;       // evita múltiples popups
 let handsPopupIntervalId = null;  // para cortar el polling al cerrar
 
-// Single-shot finish scheduling to avoid repeated popups
+// Session control to avoid stale/rescheduled popups
+window.sessionId = window.sessionId || 0;    // increments when a new "maniobra" starts
+window.finishPopupShown = window.finishPopupShown || false;
+
 let finishTimeoutId = null;
 let finishScheduled = false;
-let finishPopupShown = false;
 
 let flagCierroPopup = false;
+
 
 function clearFinishSchedule() {
 	if (finishTimeoutId) {
@@ -39,29 +42,112 @@ function clearFinishSchedule() {
 	finishScheduled = false;
 }
 
-function scheduleFinishOnce() {
-	if (finishScheduled || finishPopupShown) return;
-	finishScheduled = true;
-	finishTimeoutId = setTimeout(() => {
-		if (currentState !== 'FINISH') {
-			currentState = 'FINISH';
-			sendToModule({
-				idDestino: 0x64,
-				idPag: contadorUniversal,
-				idOrigen: 0x01,
-				comando: 0x05,
-				data
-			});
-		}
-		if (!finishPopupShown && typeof window.saveCharts === 'function') {
-			finishPopupShown = true;
-			window.saveCharts();
-		}
-		comando = 0x01;
-		finishTimeoutId = null;
-		finishScheduled = false;
-	}, 60000);
+// Función para reiniciar todos los estados al iniciar una nueva maniobra
+function resetAllStates() {
+	console.log("🔄 Reiniciando todos los estados para nueva maniobra...");
+	
+	// Detener todos los intervalos y timeouts
+	if (simulationInterval) {
+		clearInterval(simulationInterval);
+		simulationInterval = null;
+	}
+	if (bluetoothInterval) {
+		clearInterval(bluetoothInterval);
+		bluetoothInterval = null;
+	}
+	if (serialInterval) {
+		clearInterval(serialInterval);
+		serialInterval = null;
+	}
+	if (handsPopupIntervalId) {
+		clearInterval(handsPopupIntervalId);
+		handsPopupIntervalId = null;
+	}
+	clearFinishSchedule();
+	
+	// Reiniciar variables de datos
+	lastBluetoothData = null;
+	lastSerialData = null;
+	previousSerialData = null;
+	
+	// Reiniciar variables de posición y sensores
+	handPosition = null;
+	profundidad = null;
+	freq = null;
+	
+	// Reiniciar flags y estados
+	handsFlag = false;
+	currentState = 'IDLE';
+	contadorUniversal = 0;
+	handsPopupShown = false;
+	window.handsOk = false;
+	handsPopupOpen = false;
+	// finishPopupShown = false;
+	flagCierroPopup = false;
+	
+	// Reiniciar variables de comunicación
+	idDestino = 0x00;
+	idPag = 0x00;
+	idOrigen = 0x00;
+	comando = 0x01;
+	data = new Array(8).fill(0x00);
+	
+	// Reiniciar flags de envío de datos
+	flagSendData = false;
+	sendDataFlag = false;
+	flagCambio = true;
+	count = 0;
+	
+	// Limpiar datos mostrados en pantalla
+	if (receivedDataElement) {
+		receivedDataElement.textContent = "Ningún dato recibido aún";
+	}
+	
+	// Resetear texto del botón de simulación si existe
+	const simulateButton = document.getElementById('simulateButton');
+	if (simulateButton) {
+		simulateButton.textContent = "Simular Trama";
+	}
+	
+	console.log("✅ Todos los estados reiniciados correctamente");
+	console.log("🔌 Conexión serial preservada:", serialPort ? "Activa" : "Inactiva");
 }
+
+function scheduleFinishOnce() {
+    if (finishScheduled || window.finishPopupShown) return;
+    finishScheduled = true;
+    const thisSession = window.sessionId;
+
+    finishTimeoutId = setTimeout(() => {
+        // Si la sesión cambió (se inició nueva maniobra), ignoramos este timeout
+        if (thisSession !== window.sessionId) {
+            finishTimeoutId = null;
+            finishScheduled = false;
+            return;
+        }
+
+        if (currentState !== 'FINISH') {
+            currentState = 'FINISH';
+            sendToModule({
+                idDestino: 0x64,
+                idPag: contadorUniversal,
+                idOrigen: 0x01,
+                comando: 0x05,
+                data
+            });
+        }
+
+        if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
+            window.finishPopupShown = true;   // marcar ANTES de llamar
+            window.saveCharts();
+        }
+
+        comando = 0x01;
+        finishTimeoutId = null;
+        finishScheduled = false;
+    }, 60000);
+}
+
 
 let idDestino = 0x00;
 let idPag = 0x00;
@@ -278,6 +364,9 @@ function stopSerialLoop() {
 }
 
 window.restartSerialLoop = function restartSerialLoop() {
+    // Reiniciar todos los estados antes de iniciar el nuevo loop
+    resetAllStates();
+    
     if (!serialInterval) {
         serialInterval = setInterval(() => {
             contadorUniversal++;
@@ -287,7 +376,7 @@ window.restartSerialLoop = function restartSerialLoop() {
 				case 0x01:  //la variable comando esta inicializada como 0x01 entonces siempre entra a este case primero
 					sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data}) //mandamos al buddy el comando 0x01
 					currentState = 'START'
-					finishPopupShown = false;
+					// finishPopupShown = false;
 					clearFinishSchedule();
 					console.log('el estado actual es: ', currentState);
 					console.log('el comando actual es: ', comando);
@@ -386,17 +475,26 @@ window.restartSerialLoop = function restartSerialLoop() {
 						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
 					}
 
+					const thisSession = window.sessionId;
 					setTimeout(() => {
+						// si la sesión cambió: ignorar
+						if (thisSession !== window.sessionId) return;
+
 						currentState = 'FINISH';
 						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+
 						if (!flagCierroPopup) {
 							flagCierroPopup = true;
-							window.saveCharts();
+							if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
+								window.finishPopupShown = true;
+								window.saveCharts();
+							}
 						}
 
 						// detener el loop de estados
 						stopSerialLoop();
 					}, 60000);
+
 
 					break;
 
@@ -588,7 +686,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 				case 0x01:  //la variable comando esta inicializada como 0x01 entonces siempre entra a este case primero
 					sendToModule({idDestino: 0x64,idPag,idOrigen:0x01,comando,data}) //mandamos al buddy el comando 0x01
 					currentState = 'START'
-					finishPopupShown = false;
+					// finishPopupShown = false;
 					clearFinishSchedule();
 					console.log('el estado actual es: ', currentState);
 					console.log('el comando actual es: ', comando);
@@ -687,18 +785,25 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
 					}
 
+					const thisSession = window.sessionId;
 					setTimeout(() => {
+						// si la sesión cambió: ignorar
+						if (thisSession !== window.sessionId) return;
+
 						currentState = 'FINISH';
 						sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+
 						if (!flagCierroPopup) {
 							flagCierroPopup = true;
-							window.saveCharts();
+							if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
+								window.finishPopupShown = true;
+								window.saveCharts();
+							}
 						}
 
 						// detener el loop de estados
 						stopSerialLoop();
 					}, 60000);
-
 					break;
 
 				
@@ -724,14 +829,13 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 // Ensure manual finish clears timer and sends finish command once
 const manualFinishButton = document.getElementById('saveButton');
 if (manualFinishButton) manualFinishButton.addEventListener('click', () => {
-	clearFinishSchedule();
-	if (currentState !== 'FINISH') {
-		currentState = 'FINISH';
-		sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
-	}
-	// Trigger popup when finishing manually, but only once
-	if (!finishPopupShown && typeof window.saveCharts === 'function') {
-		finishPopupShown = true;
-		window.saveCharts();
-	}
+    clearFinishSchedule();
+    if (currentState !== 'FINISH') {
+        currentState = 'FINISH';
+        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+    }
+    if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
+        window.finishPopupShown = true;
+        window.saveCharts();
+    }
 });
