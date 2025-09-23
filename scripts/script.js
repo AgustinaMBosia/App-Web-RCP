@@ -647,6 +647,7 @@ window.restartSerialLoop = function () {
                                 window.saveCharts();
                             }
                         }
+						comando = 0x01;
                     }, 60000);
                     break;
             }
