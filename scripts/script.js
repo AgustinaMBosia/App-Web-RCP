@@ -510,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                             window.saveCharts();
                                         }
                                     }
+									comando = 0x01;
                                 }, 60000);
                                 break;
                         }
