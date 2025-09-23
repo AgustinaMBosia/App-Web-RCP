@@ -99,19 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		data: freqData,
 		options: { 
 			responsive: true, 
-			plugins: { 
-				legend: { position: 'top' } 
-			},
-			scales: {
-				y: {
-					min: 0,
-					max: 210
-				}
-			}
+			plugins: { legend: { position: 'top' } },
+			scales: { y: { min: 0, max: 210 } }
 		},
 		plugins: [rangePlugin]
 	});
-
 
 	const profChart = new Chart(profCtx, {
 		type: 'bar',
@@ -176,7 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
 	function saveCharts() {
-		console.log('saveCharts() called — session:', window.sessionId);
+		console.log("saveCharts() ejecutado, sessionId:", window.sessionId);
+
 		downloadCSV();
 
 		const correct = pieData.datasets[0].data[0];
@@ -189,10 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		const handSummaryData = {
 			labels: ['Posición de manos OK', 'No OK'],
-			datasets: [{
-				data: [handOKCount, handNotOKCount],
-				backgroundColor: ['green', 'red']
-			}]
+			datasets: [{ data: [handOKCount, handNotOKCount], backgroundColor: ['green', 'red'] }]
 		};
 
 		Swal.fire({
@@ -224,42 +214,26 @@ document.addEventListener('DOMContentLoaded', () => {
 				});
 				new Chart(document.getElementById('freqPreview').getContext('2d'), {
 					type: 'line',
-					data: {
-						labels: fullLabels,
-						datasets: [{
-							label: 'Frecuencia',
-							data: fullFreqData,
-							borderColor: 'blue',
-							fill: false,
-							tension: 0.1
-						}]
-					},
+					data: { labels: fullLabels, datasets: [{ label: 'Frecuencia', data: fullFreqData, borderColor: 'blue', fill: false, tension: 0.1 }] },
 					options: { responsive: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
 				});
 				new Chart(document.getElementById('profPreview').getContext('2d'), {
 					type: 'bar',
-					data: {
-						labels: fullLabels,
-						datasets: [{
-							label: 'Profundidad',
-							data: fullProfData,
-							backgroundColor: 'rgba(255, 99, 132, 0.5)',
-						}]
-					},
+					data: { labels: fullLabels, datasets: [{ label: 'Profundidad', data: fullProfData, backgroundColor: 'rgba(255, 99, 132, 0.5)' }] },
 					options: { responsive: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
 				});
 			}
 		}).then((result) => {
 			if (result.isConfirmed) {
-				// Reiniciar gráficos y todos los estados para nueva maniobra
+				// 🔄 Nueva maniobra
 				resetCharts();
 				console.log("🔄 Iniciando nueva maniobra...");
-				// invalidar timeouts/handlers pendientes de la sesión anterior
-				window.sessionId = (window.sessionId || 0) + 1;
-				// ahora sí permitimos futuros popups para la NUEVA sesión
+				window.sessionId++;
 				window.finishPopupShown = false;
-				window.restartSerialLoop();
-				
+				window.handsPopupShownThisSession = false;
+				if (typeof window.restartSerialLoop === 'function') {
+					window.restartSerialLoop();
+				}
 			} else if (result.isDenied) {
 				if (typeof window.closeSerialConnection === 'function') {
 					window.closeSerialConnection();
@@ -277,7 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (resetButton) resetButton.addEventListener('click', resetCharts);
 	if (saveButton) saveButton.addEventListener('click', saveCharts);
 
-	// Expose saveCharts globally so other scripts can trigger the popup
 	window.saveCharts = saveCharts;
 
 	function handleDataForVisualization(parsedData) {
@@ -287,12 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		const prof = parsedData.profundidad || 0;
 		const handPos = parsedData.handPosition || 'N/A';
 
-		if (handPos === "OK") {
-			startTracking = true;
-		}
-		if (!startTracking) {
-			return;
-		}
+		if (handPos === "OK") startTracking = true;
+		if (!startTracking) return;
 
 		globalCounter++;
 
@@ -345,13 +314,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 
-	// Expose global function for direct calls from other scripts
 	window.updateVisualization = function updateVisualization(data) {
 		try {
 			let parsedData = data;
-			if (typeof data === 'string') {
-				parsedData = JSON.parse(data);
-			}
+			if (typeof data === 'string') parsedData = JSON.parse(data);
 			handleDataForVisualization(parsedData);
 		} catch (error) {
 			console.error('Error al procesar los datos:', error);
