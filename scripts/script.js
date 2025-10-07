@@ -278,6 +278,7 @@ async function sendToModule({
 	comando,
 	data // Array de 8 bytes
 }) {
+	console.log("paquete enviado");
 	function calculateChecksum(data) {
 			let sum = 0;
 
@@ -518,7 +519,7 @@ window.restartSerialLoop = function restartSerialLoop() {
 					break;
 
 			}
-        }, 500);
+        }, 1000);
         console.log("▶️ Loop de estados reiniciado.");
     }
 }
@@ -577,7 +578,7 @@ function abrirPopup() {
 document.getElementById('serialButton').addEventListener('click', async () => {
 	try {
 		serialPort = await navigator.serial.requestPort();
-		await serialPort.open({ baudRate: 9600 });
+		await serialPort.open({ baudRate: 115200 });
 
 		serialReader = serialPort.readable.getReader();
 
@@ -829,7 +830,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 			}
 
 
-		}, 500);
+		}, 1000);
 
 
 		alert('Conexión Serial establecida.');
