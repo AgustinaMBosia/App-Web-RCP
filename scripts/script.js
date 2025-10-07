@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
         serialButton.addEventListener('click', async () => {
             try {
                 serialPort = await navigator.serial.requestPort();
-                await serialPort.open({ baudRate: 9600 });
+                await serialPort.open({ baudRate: 115200 });
 
                 serialReader = serialPort.readable.getReader();
                 startSerialReadLoop();
@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }, 60000);
                                 break;
                         }
-                    }, 500);
+                    }, 1000);
                 }
 
                 alert('Conexión Serial establecida.');
@@ -651,7 +651,7 @@ window.restartSerialLoop = function () {
                     }, 60000);
                     break;
             }
-        }, 500);
+        }, 1000);
         log('▶️ Loop serial reiniciado en restartSerialLoop()');
     } else {
         log('ℹ️ restartSerialLoop: no hay puerto serial abierto, solo reseteo de estados');
