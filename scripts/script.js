@@ -33,6 +33,10 @@ let finishScheduled = false;
 
 let flagCierroPopup = false;
 
+let timeAnterior = null;
+let timeActual = null;
+let processedDataAnterior = null;
+
 
 function clearFinishSchedule() {
 	if (finishTimeoutId) {
@@ -199,22 +203,32 @@ function processSensorData(sensorBytes) {
 
 	window.handsOk = (manoOK === 'OK');
 
-	console.log("📥 Datos decodificados:");
-	console.log("🤚 Mano:", manoOK);
-	console.log("📏 Profundidad:", profundidad);
-	console.log("🎯 Frecuencia:", frecuencia);
-
-	receivedDataElement.textContent = `
-		Posición de la Mano: ${manoOK}
-		Profundidad: ${profundidad}
-		Frecuencia: ${frecuencia}
-	`;
+	console.log("Datos decodificados:");
+	console.log("Mano:", manoOK);
+	console.log("Profundidad:", profundidad);
+	console.log("Frecuencia:", frecuencia);
 
 	const processedData = {
 		handPosition: manoOK,
 		profundidad,
 		freq: frecuencia
 	};
+
+	timeActual = Date.now();
+	if (timeAnterior) {
+		if (processedDataAnterior &&
+			processedData.handPosition === processedDataAnterior.handPosition &&
+			processedData.profundidad === processedDataAnterior.profundidad &&
+			processedData.freq === processedDataAnterior.freq) {
+			// Datos idénticos, no hacer nada
+		}else {
+			const diff = timeActual - timeAnterior;
+			console.log(`Tiempo entre datos: ${diff} ms`);
+		}
+	}
+	timeAnterior = timeActual;
+	processedDataAnterior = processedData;
+
 
 	if (typeof window.updateVisualization === 'function') {
 		window.updateVisualization(processedData);
@@ -646,7 +660,8 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 			idPag = IDpaq;
 			idOrigen = packet[6];  // solo low byte
 			idDestino = dirDestino1;
-			sendDataFlag = packet[14];
+			if (packet[14] === 0x01) sendDataFlag = true; // si el byte 5 de data es 0x01
+			if (packet[14] === 0x00) sendDataFlag = false; // si el byte 5 de data es 0x00
 
 			// Mostrar todo en consola
 			console.log("✅ Trama recibida:");
@@ -656,7 +671,7 @@ document.getElementById('serialButton').addEventListener('click', async () => {
 			console.log(`🔧 Comando: 0x${receivedComando.toString(16).padStart(2, '0')}`);
 			console.log(`📊 Data: [${receivedData.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
 			console.log(`🧮 Checksum: 0x${checksum.toString(16).padStart(2, '0')}`);
-			console.log(`Bandera de sendData: 0x${sendDataFlag.toString(16).padStart(4, '0')}`);
+			console.log(`Bandera de sendData: ${sendDataFlag.toString(16).padStart(4, '0')}`);
 		}
 
 

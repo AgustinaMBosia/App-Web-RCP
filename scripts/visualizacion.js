@@ -33,8 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	const freqIdealMin = 100;
 	const freqIdealMax = 120;
-	const profIdealMin = 5;
-	const profIdealMax = 6;
+	const profIdealMin = 50;
+	const profIdealMax = 60;
 
 	const freqData = {
 		labels: [],
