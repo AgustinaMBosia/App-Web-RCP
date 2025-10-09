@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }, 60000);
                                 break;
                         }
-                    }, 1000);
+                    }, 250);
                 }
 
                 alert('Conexión Serial establecida.');
@@ -651,7 +651,7 @@ window.restartSerialLoop = function () {
                     }, 60000);
                     break;
             }
-        }, 1000);
+        }, 250);
         log('▶️ Loop serial reiniciado en restartSerialLoop()');
     } else {
         log('ℹ️ restartSerialLoop: no hay puerto serial abierto, solo reseteo de estados');
