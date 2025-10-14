@@ -47,6 +47,12 @@ let sendDataFlag = false;
 let flagCambio = true;
 let count = 0;
 
+let samePacketCount = 0;
+let lastPacketId = null;
+let stuckTimeout = null;
+
+
+
 const DEBUG = true;
 
 /* ---------- Utility helpers ---------- */
@@ -230,7 +236,7 @@ function abrirPopup() {
 
     Swal.fire({
         title: "Poner bien las manos",
-        text: "El pop-up se cerrará cuando pongas bien la mano.",
+        text: "El pop-up se cerrará cuando pongas bien las manos",
         icon: "info",
         showConfirmButton: false,
         allowOutsideClick: false,
@@ -297,6 +303,43 @@ async function sendToModule({ idDestino, idPag, idOrigen, comando, data }) {
     }
 }
 
+function checkStuckPacket(currentId) {
+    if (currentId === lastPacketId) {
+        samePacketCount++;
+    } else {
+        samePacketCount = 0;
+        lastPacketId = currentId;
+    }
+
+    if (samePacketCount >= 10) { // 10 ciclos (~2.5 s si intervalo=250ms)
+        samePacketCount = 0;
+        lastPacketId = null;
+
+        if (stuckTimeout) clearTimeout(stuckTimeout);
+        stuckTimeout = setTimeout(() => {
+            if (window.Swal) {
+                Swal.fire({
+                    title: "⚠️ Sin recepción de datos",
+                    text: "La maniobra se ha detenido por falta de actualización de paquetes.",
+                    icon: "warning",
+                    confirmButtonText: "Aceptar"
+                });
+            } else {
+                alert("⚠️ Sin recepción de datos: la maniobra se ha detenido.");
+            }
+
+            // Detiene la maniobra
+            stopSerialLoop();
+            currentState = 'FINISH';
+            if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
+                window.finishPopupShown = true;
+                window.saveCharts();
+            }
+        }, 500);
+    }
+}
+
+
 /* ---------- Simulación ---------- */
 function generateSimulatedData() {
     const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
@@ -340,6 +383,7 @@ function startSerialReadLoop() {
                                 sendDataFlag = packet[14];
 
                                 log('📥 Trama valida recibida, comando=0x' + receivedComando.toString(16));
+
                             } else {
                                 log('⚠️ Checksum invalido', checksum, calc);
                             }
@@ -445,6 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             return;
                         }
                         contadorUniversal++;
+                        
                         // state machine logic (simple mirroring the earlier cases)
                         switch (comando) {
                             case 0x01:
@@ -469,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                                 if (data[0] === 0xFF) currentState = 'IDLE';
                                 break;
+                                    
                             case 0x03:
                                 if (!flagSendData) {
                                     if (flagCambio || count < 3) {
@@ -489,14 +535,17 @@ document.addEventListener('DOMContentLoaded', () => {
                                     if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
                                         processSensorData(data);
                                         sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                                        checkStuckPacket(idPag);
                                     }
                                     scheduleFinishOnce();
+                                    
                                 }
                                 break;
                             case 0x68:
                                 if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
                                     processSensorData(data);
                                     sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                                    checkStuckPacket(idPag);
                                 }
                                 const timeoutSession = window.sessionId;
                                 setTimeout(() => {
@@ -510,10 +559,48 @@ document.addEventListener('DOMContentLoaded', () => {
                                             window.saveCharts();
                                         }
                                     }
-									comando = 0x01;
+                                    comando = 0x01;    
                                 }, 60000);
                                 break;
-                        }
+                            
+                            case 0x09: 
+                                if (window.Swal) {
+                                    Swal.fire({
+                                        title: "⚠️ bateria baja",
+                                        text: "La maniobra no se puede ejecutar por falta de bateria",
+                                        icon: "warning",
+                                        confirmButtonText: "Aceptar"
+                                    });
+                                } else {
+                                    alert("⚠️ Sin bateria: la maniobra se ha detenido.");
+                                }
+
+                                // Detiene la maniobra
+                                stopSerialLoop();
+                                currentState = 'FINISH';
+                                
+                                break;
+
+                            case 0x0A:
+                            case 0x0B:
+                                if (window.Swal) {
+                                    Swal.fire({
+                                        title: "⚠️ Falla en los sensores",
+                                        text: "La maniobra no se puede ejecutar por falla en los sensores",
+                                        icon: "warning",
+                                        confirmButtonText: "Aceptar"
+                                    });
+                                } else {
+                                    alert("⚠️ falla en los sensores.");
+                                }
+
+                                // Detiene la maniobra
+                                stopSerialLoop();
+                                currentState = 'FINISH';
+                               
+
+                                break;
+                            }
                     }, 250);
                 }
 
@@ -583,6 +670,7 @@ window.restartSerialLoop = function () {
                 return;
             }
             contadorUniversal++;
+            
             switch (comando) {
                 case 0x01:
                     sendToModule({ idDestino: 0x64, idPag, idOrigen: 0x01, comando, data });
@@ -626,6 +714,7 @@ window.restartSerialLoop = function () {
                         if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
                             processSensorData(data);
                             sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                            checkStuckPacket(idPag);
                         }
                         scheduleFinishOnce();
                     }
@@ -634,6 +723,7 @@ window.restartSerialLoop = function () {
                     if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
                         processSensorData(data);
                         sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                        checkStuckPacket(idPag);
                     }
                     const timeoutSession = window.sessionId;
                     setTimeout(() => {
@@ -649,6 +739,41 @@ window.restartSerialLoop = function () {
                         }
 						comando = 0x01;
                     }, 60000);
+                    break;
+                case 0x09: 
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: "⚠️ bateria baja",
+                            text: "La maniobra no se puede ejecutarse por falta de bateria",
+                            icon: "warning",
+                            confirmButtonText: "Aceptar"
+                        });
+                    } else {
+                        alert("⚠️ Sin bateria: la maniobra se ha detenido.");
+                    }
+
+                    // Detiene la maniobra
+                    stopSerialLoop();
+                    currentState = 'FINISH';
+                    break;
+
+                case 0x0A:
+                case 0x0B:
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: "⚠️ Falla en los sensores",
+                            text: "La maniobra no se puede ejecutarse por falla en los sensores",
+                            icon: "warning",
+                            confirmButtonText: "Aceptar"
+                        });
+                    } else {
+                        alert("⚠️ falla en los sensores.");
+                    }
+
+                // Detiene la maniobra
+                    stopSerialLoop();
+                    currentState = 'FINISH';
+
                     break;
             }
         }, 250);
