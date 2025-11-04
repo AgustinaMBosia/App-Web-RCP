@@ -165,12 +165,18 @@ document.addEventListener('DOMContentLoaded', () => {
 		recordedData.length = 0;
 
 		updateCharts();
+
+		console.log("🔄 Iniciando nueva maniobra...");
+		window.sessionId++;
+		window.finishPopupShown = false;
+		window.handsPopupShownThisSession = false;
+		if (typeof window.restartSerialLoop === 'function') {
+			window.restartSerialLoop();
+		}
 	}
 
 	function saveCharts() {
 		console.log("saveCharts() ejecutado, sessionId:", window.sessionId);
-
-		downloadCSV();
 
 		const correct = pieData.datasets[0].data[0];
 		const incorrect = pieData.datasets[0].data[1];
@@ -199,8 +205,11 @@ document.addEventListener('DOMContentLoaded', () => {
 			width: 800,
 			showConfirmButton: true,
 			showDenyButton: true,
+			showCancelButton: true,
 			confirmButtonText: 'Nueva Maniobra',
 			denyButtonText: 'Cerrar',
+			cancelButtonText: 'Guardar CSV',
+			preCancel: () => false,  // Prevent closing on cancel
 			didOpen: () => {
 				new Chart(document.getElementById('piePreview').getContext('2d'), {
 					type: 'pie',
@@ -222,18 +231,22 @@ document.addEventListener('DOMContentLoaded', () => {
 					data: { labels: fullLabels, datasets: [{ label: 'Profundidad', data: fullProfData, backgroundColor: 'rgba(255, 99, 132, 0.5)' }] },
 					options: { responsive: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
 				});
+
+				// Agrega el evento al botón "Guardar CSV"
+				const swalButtons = document.querySelectorAll('.swal2-cancel');
+				swalButtons.forEach(btn => {
+					btn.onclick = (e) => {
+						e.stopPropagation();
+						downloadCSV();
+						btn.style.backgroundColor = '#4CAF50';
+						btn.style.color = '#fff';
+					};
+				});
 			}
 		}).then((result) => {
 			if (result.isConfirmed) {
 				// 🔄 Nueva maniobra
 				resetCharts();
-				console.log("🔄 Iniciando nueva maniobra...");
-				window.sessionId++;
-				window.finishPopupShown = false;
-				window.handsPopupShownThisSession = false;
-				if (typeof window.restartSerialLoop === 'function') {
-					window.restartSerialLoop();
-				}
 			} else if (result.isDenied) {
 				if (typeof window.closeSerialConnection === 'function') {
 					window.closeSerialConnection();

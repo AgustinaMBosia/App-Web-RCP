@@ -238,9 +238,10 @@ function abrirPopup() {
         title: "Poner bien las manos",
         text: "El pop-up se cerrará cuando pongas bien las manos",
         icon: "info",
-        showConfirmButton: false,
+        showConfirmButton: true,
         allowOutsideClick: false,
         allowEscapeKey: false,
+		confirmButtonText: 'Terminar Maniobra',
         didClose: () => {
             handsPopupOpen = false;
             if (handsPopupIntervalId) {
@@ -248,7 +249,11 @@ function abrirPopup() {
                 handsPopupIntervalId = null;
             }
         }
-    });
+		}).then((result) => {
+			if (result.isConfirmed) {
+				window.saveCharts();
+			}
+    	});
 
     const thisSession = window.sessionId;
     handsPopupIntervalId = setInterval(() => {
@@ -567,7 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (window.Swal) {
                                     Swal.fire({
                                         title: "⚠️ bateria baja",
-                                        text: "La maniobra no se puede ejecutar por falta de bateria",
+                                        text: "La maniobra no se puede ejecutarse por falta de bateria, conectar cargador.",
                                         icon: "warning",
                                         confirmButtonText: "Aceptar"
                                     });
@@ -586,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (window.Swal) {
                                     Swal.fire({
                                         title: "⚠️ Falla en los sensores",
-                                        text: "La maniobra no se puede ejecutar por falla en los sensores",
+                                        text: "La maniobra no se puede ejecutar por falla en los sensores, llame a servicio técnico.",
                                         icon: "warning",
                                         confirmButtonText: "Aceptar"
                                     });
@@ -650,7 +655,7 @@ async function closeSerialConnection() {
             await serialPort.close();
             serialPort = null;
         }
-        log('🔌 Serial cerrado');
+        log(' Serial cerrado');
     } catch (err) {
         console.error('❌ Error cerrando serial:', err);
     }
