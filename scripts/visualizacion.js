@@ -36,6 +36,12 @@ document.addEventListener('DOMContentLoaded', () => {
 	const profIdealMin = 5;
 	const profIdealMax = 6;
 
+	// Configuración descargas de csv
+	const MAX_CSV_FILES = 100;
+	let savedFiles = []; // Guarda nombres y fechas
+	let savedDirHandle = null;
+
+
 	const freqData = {
 		labels: [],
 		datasets: [{
@@ -124,25 +130,75 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 
-	function downloadCSV() {
+
+		(async () => {
+		try {
+			const storedDir = localStorage.getItem("savedDirHandle");
+			if (storedDir) {
+				savedDirHandle = await window.showDirectoryPicker({ startIn: JSON.parse(storedDir) });
+				console.log("📂 Carpeta restaurada desde sesión anterior");
+			}
+		} catch (err) {
+			console.warn("⚠️ No se pudo restaurar la carpeta guardada:", err);
+		}
+	})();
+
+	async function downloadCSV() {
 		if (recordedData.length === 0) return;
 
 		const header = "Timestamp,Frecuencia,Profundidad,PosicionMano\n";
 		const rows = recordedData.map(row =>
 			`${row.timestamp},${row.frecuencia},${row.profundidad},${row.posicionMano}`
 		);
-
 		const csvContent = header + rows.join("\n");
 		const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-		const url = URL.createObjectURL(blob);
 
-		const link = document.createElement("a");
-		link.href = url;
-		link.setAttribute("download", `maniobra_${new Date().toISOString()}.csv`);
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		try {
+			// (1) Verificar si ya hay carpeta guardada
+			if (!savedDirHandle) {
+				savedDirHandle = await window.showDirectoryPicker();
+				localStorage.setItem("savedDirHandle", JSON.stringify(savedDirHandle.name));
+				console.log("💾 Carpeta guardada en localStorage:", savedDirHandle.name);
+			}
+
+			// (2) Control de límite de archivos
+			if (savedFiles.length >= MAX_CSV_FILES) {
+				savedFiles.sort((a, b) => a.date - b.date);
+				const oldest = savedFiles.shift();
+				try {
+					await savedDirHandle.removeEntry(oldest.name);
+					console.log(`🗑️ Archivo antiguo eliminado: ${oldest.name}`);
+				} catch (err) {
+					console.warn("No se pudo borrar archivo anterior:", err);
+				}
+			}
+
+			// (3) Guardar nuevo archivo CSV
+			const fileName = `maniobra_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+			const fileHandle = await savedDirHandle.getFileHandle(fileName, { create: true });
+			const writable = await fileHandle.createWritable();
+			await writable.write(blob);
+			await writable.close();
+
+			savedFiles.push({ name: fileName, date: new Date() });
+			alert('Se ha guardado correctamente')
+
+			
+		} catch (err) {
+			console.error("❌ Error guardando CSV:", err);
+
+			// Si se revocó el permiso, volver a pedir carpeta
+			if (err.name === "SecurityError" || err.name === "NotAllowedError") {
+				localStorage.removeItem("savedDirHandle");
+				savedDirHandle = null;
+				alert("Debes volver a seleccionar la carpeta para guardar los archivos.");
+			} else {
+				alert("No se pudo guardar el CSV.");
+			}
+		}
 	}
+
+
 
 	function resetCharts() {
 		globalCounter = 0;
