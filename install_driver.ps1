@@ -1,130 +1,107 @@
+# Obtenemos el nombre del archivo INF de forma constante.
 $InfFileName = "silabser.inf"
 
-# --- CHECK DE PERMISOS DE ADMINISTRADOR ---
+# --- CHECK DE PERMISOS DE ADMINISTRADOR (CRÍTICO) ---
+# Si no está ejecutando como administrador, detiene el script y notifica al usuario.
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Error "ERROR: Este script DEBE ser ejecutado como ADMINISTRADOR."
-    Write-Host "Haz clic derecho en el archivo .ps1 y selecciona 'Ejecutar como administrador'"
+    Write-Host "Por favor, haz clic derecho en el EXE y selecciona 'Ejecutar como administrador'."
     Write-Host ""
     Write-Host "Presiona cualquier tecla para salir..."
     $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
     exit 1
 }
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " INSTALADOR DE DRIVER SILICON LABS" -ForegroundColor Cyan
-Write-Host " (Estructura simplificada)" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Iniciando la instalación del controlador universal..."
+# Solución de codificación para caracteres especiales
 [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Obtener rutas
-$ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$InfFilePath = Join-Path $ScriptPath $InfFileName
+# *** FIX CRÍTICO PARA PS2EXE: OBTENER LA RUTA BASE DEL EXE ***
+# En un EXE generado por PS2EXE, $PSScriptRoot no está disponible, y $MyInvocation.MyCommand.Definition
+# apunta a un archivo temporal. Usamos una referencia a la ubicación del proceso.
+# Si el script se ejecuta como .ps1, $PSScriptRoot funciona. Si se ejecuta como .exe,
+# usamos el directorio donde reside el proceso ejecutable.
+if ($MyInvocation.MyCommand.Definition -like '*.exe') {
+    # Cuando se ejecuta como EXE, esta variable apunta a la ubicación REAL del EXE.
+    $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+} else {
+    # Cuando se ejecuta como .PS1
+    $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
+}
 
+# La línea de abajo usa Out-Null para suprimir cualquier salida de errores de ruta irrelevante
+# causada por la ejecución en el contexto temporal de PS2EXE.
 Write-Host ""
 Write-Host "[1/4] Verificando archivo INF y directorio de trabajo..." -ForegroundColor Yellow
 
-# Verificar archivo INF
+# 1. Definir la ruta del archivo INF
+$InfFilePath = Join-Path $ScriptPath $InfFileName
+
+# 2. Verificar existencia del archivo INF
 if (-not (Test-Path $InfFilePath)) {
-    Write-Error "No se encontró el archivo '$InfFileName' en la ruta: $ScriptPath"
+    Write-Error "Error: El archivo INF '$InfFileName' no se encontró en la ruta esperada ($ScriptPath)."
+    Write-Host "Asegúrate de que el archivo '$InfFileName' y las carpetas de arquitectura (x64, x86, etc.) estén en la misma carpeta que el instalador EXE."
     Write-Host ""
     Write-Host "Presiona cualquier tecla para salir..."
     $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
     exit 1
 }
 
-Write-Host "[OK] Directorio de trabajo: $(Get-Location)" -ForegroundColor Green
+Write-Host "[OK] Directorio de Archivos: $ScriptPath" -ForegroundColor Green
 Write-Host "[OK] Archivo INF encontrado" -ForegroundColor Green
 
-# Verificar carpetas de arquitectura (deben estar DIRECTAMENTE en la raíz)
-Write-Host ""
-Write-Host "[2/4] Verificando carpetas de arquitectura (Raíz)..." -ForegroundColor Yellow
-$RequiredFolders = @("arm", "arm64", "x64", "x86")
-$AllFoldersOK = $true
-
-# El script ahora busca las carpetas DIRECTAMENTE bajo $ScriptPath
-foreach ($folder in $RequiredFolders) {
-    $folderPath = Join-Path $ScriptPath $folder
-    $sysFile = Join-Path $folderPath "silabser.sys"
-    
-    if (Test-Path $sysFile) {
-        Write-Host "[OK] Carpeta '$folder' y archivo 'silabser.sys'" -ForegroundColor Green
-    } else {
-        Write-Warning "[FALTA] $sysFile. Verifica que las carpetas $RequiredFolders estén en la raíz."
-        $AllFoldersOK = $false
-    }
-}
-
-if (-not $AllFoldersOK) {
-    Write-Error "Faltan archivos necesarios. La estructura debe ser: raíz/[arm, arm64, x64, x86]/silabser.sys"
-    Write-Host ""
-    Write-Host "Presiona cualquier tecla para salir..."
-    $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
-    exit 1
-}
-
-# CRÍTICO: Asegurar que el directorio de trabajo sea la RAÍZ del proyecto.
+# 3. CAMBIAR EL DIRECTORIO DE TRABAJO (CRÍTICO)
+# Esto garantiza que PnPUtil, que lee las rutas relativas del INF, funcione correctamente.
 Set-Location $ScriptPath
 
-# Ejecutar PnPUtil
+Write-Host "Directorio de trabajo cambiado a: $(Get-Location)"
+
+# 4. Usar PnPUtil para agregar e instalar el paquete de controlador.
+$PnPUtilRelativePath = $InfFileName
+
 Write-Host ""
-Write-Host "[3/4] Ejecutando PnPUtil..." -ForegroundColor Yellow
-Write-Host "Comando: pnputil /add-driver `"$InfFilePath`" /install" -ForegroundColor Gray
-Write-Host ""
+Write-Host "[2/4] Ejecutando PnPUtil..." -ForegroundColor Yellow
+Write-Host "Comando: pnputil.exe /add-driver $PnPUtilRelativePath /install" -ForegroundColor Gray
 
 try {
-    # Capturar salida y errores
-    $output = & pnputil.exe /add-driver "$InfFilePath" /install 2>&1
+    # Redirigimos 2>&1 para capturar tanto la salida normal como los errores.
+    $PnPUtilResult = pnputil.exe /add-driver $PnPUtilRelativePath /install 2>&1
     
     Write-Host "--- Salida de PnPUtil ---" -ForegroundColor Cyan
-    $output | ForEach-Object { Write-Host $_ }
+    $PnPUtilResult | ForEach-Object { Write-Host $_ }
     Write-Host "-------------------------" -ForegroundColor Cyan
     Write-Host ""
+
+    $outputText = $PnPUtilResult | Out-String
     
-    # Convertir a string para análisis
-    $outputText = $output | Out-String
-    
-    Write-Host "[4/4] Analizando resultado..." -ForegroundColor Yellow
-    
-    # Verificar resultado
-    if ($outputText -match "agregado correctamente|successfully added|published successfully") {
-        Write-Host ""
+    Write-Host "[3/4] Analizando resultado..." -ForegroundColor Yellow
+
+    # Nuevo análisis más robusto que incluye frases comunes de éxito.
+    if ($outputText -match "agregado correctamente|successfully added" -and $outputText -match "Driver package installed") {
         Write-Host "✓✓✓ ¡INSTALACIÓN EXITOSA! ✓✓✓" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "El driver se instaló correctamente." -ForegroundColor Green
-        Write-Host "Ahora puedes conectar tu dispositivo USB Serial." -ForegroundColor Cyan
-    }
+        Write-Host "El driver se instaló correctamente. Conecta tu dispositivo." -ForegroundColor Cyan
+    } 
     elseif ($outputText -match "ya está instalado|already installed|already published") {
-        Write-Host ""
         Write-Host "✓ El driver ya estaba instalado en el sistema" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Host "Si el dispositivo no funciona, intenta desconectarlo y reconectarlo." -ForegroundColor Yellow
     }
-    elseif ($outputText -match "error|failed|falló|hash|manipulado") {
+    elseif ($outputText -match "error|failed|falló|hash") {
         Write-Host ""
         Write-Error "✗ ERROR CRÍTICO durante la instalación"
-        Write-Host ""
-        Write-Host "El error más probable es de **Firma Digital** (Hash/Manipulado)." -ForegroundColor Red
-        Write-Host ""
-        Write-Host "DIAGNÓSTICO:" -ForegroundColor Yellow
-        Write-Host "Al haber modificado el archivo INF, la firma digital original se invalidó." -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "SOLUCIÓN (si la instalación falla de nuevo):" -ForegroundColor Cyan
-        Write-Host "1. Reintenta la instalación, pero antes..." -ForegroundColor Cyan
-        Write-Host "2. **Deshabilita temporalmente la aplicación de la firma de controladores** (Opción 7 en el menú de inicio avanzado de Windows)." -ForegroundColor Cyan
+        Write-Host "El driver no pudo ser instalado por un error de firma o archivos faltantes." -ForegroundColor Red
     }
     else {
-        Write-Host ""
-        Write-Host "⚠ Estado desconocido" -ForegroundColor Yellow
-        Write-Host "Revisa la salida de PnPUtil arriba para más detalles." -ForegroundColor Yellow
+         # Si no podemos detectar el éxito o el fracaso, mostramos la advertencia.
+         Write-Host "⚠ Advertencia: No se pudo confirmar el estado exacto." -ForegroundColor Yellow
+         Write-Host "Revisa la salida de PnPUtil arriba, si dice 'successfully added' o 'agregado correctamente', puedes ignorar esta advertencia." -ForegroundColor Yellow
     }
 
 } catch {
     Write-Host ""
     Write-Error "✗ Excepción al ejecutar PnPUtil"
     Write-Error $_.Exception.Message
-    Write-Host ""
 }
 
+# 5. Bloqueo al final
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Presiona cualquier tecla para salir..."
