@@ -11,14 +11,14 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  INSTALADOR DE DRIVER SILICON LABS" -ForegroundColor Cyan
-Write-Host "    (Estructura simplificada)" -ForegroundColor Cyan
+Write-Host " INSTALADOR DE DRIVER SILICON LABS" -ForegroundColor Cyan
+Write-Host " (Estructura simplificada)" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Obtener rutas
 $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$InfFilePath = Join-Path $ScriptPath $InfFileName  # INF debe estar en la raíz
+$InfFilePath = Join-Path $ScriptPath $InfFileName
 
 Write-Host ""
 Write-Host "[1/4] Verificando archivo INF y directorio de trabajo..." -ForegroundColor Yellow
