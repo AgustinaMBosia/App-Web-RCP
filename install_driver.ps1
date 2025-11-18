@@ -17,10 +17,8 @@ Write-Host "Iniciando la instalación del controlador universal..."
 [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # *** FIX CRÍTICO PARA PS2EXE: OBTENER LA RUTA BASE DEL EXE ***
-# En un EXE generado por PS2EXE, $PSScriptRoot no está disponible, y $MyInvocation.MyCommand.Definition
-# apunta a un archivo temporal. Usamos una referencia a la ubicación del proceso.
 # Si el script se ejecuta como .ps1, $PSScriptRoot funciona. Si se ejecuta como .exe,
-# usamos el directorio donde reside el proceso ejecutable.
+# usamos el directorio donde reside el proceso ejecutable ($MyInvocation.MyCommand.Path).
 if ($MyInvocation.MyCommand.Definition -like '*.exe') {
     # Cuando se ejecuta como EXE, esta variable apunta a la ubicación REAL del EXE.
     $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -29,8 +27,6 @@ if ($MyInvocation.MyCommand.Definition -like '*.exe') {
     $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
 }
 
-# La línea de abajo usa Out-Null para suprimir cualquier salida de errores de ruta irrelevante
-# causada por la ejecución en el contexto temporal de PS2EXE.
 Write-Host ""
 Write-Host "[1/4] Verificando archivo INF y directorio de trabajo..." -ForegroundColor Yellow
 
@@ -72,17 +68,29 @@ try {
     Write-Host "-------------------------" -ForegroundColor Cyan
     Write-Host ""
 
-    $outputText = $PnPUtilResult | Out-String
+    # FIX DE ANÁLISIS: Convertir a una cadena limpia, reemplazando saltos de línea con espacios.
+    # Esto garantiza que la búsqueda con -match funcione correctamente.
+    $outputText = ($PnPUtilResult | Out-String) -replace "`r?`n", " "
     
     Write-Host "[3/4] Analizando resultado..." -ForegroundColor Yellow
 
-    # Nuevo análisis más robusto que incluye frases comunes de éxito.
-    if ($outputText -match "agregado correctamente|successfully added" -and $outputText -match "Driver package installed") {
-        Write-Host "✓✓✓ ¡INSTALACIÓN EXITOSA! ✓✓✓" -ForegroundColor Green
-        Write-Host "El driver se instaló correctamente. Conecta tu dispositivo." -ForegroundColor Cyan
-    } 
-    elseif ($outputText -match "ya está instalado|already installed|already published") {
-        Write-Host "✓ El driver ya estaba instalado en el sistema" -ForegroundColor Cyan
+    # Buscamos la confirmación de que se agregó Y se instaló, usando frases clave.
+    # Incluimos frases de éxito en español y en inglés.
+    if ($outputText -match "Driver package added successfully" -or $outputText -match "El paquete de controladores se ha agregado correctamente" -or $outputText -match "agregado correctamente") {
+        
+        # Si se agregó, verificamos si también se instaló en un dispositivo.
+        if ($outputText -match "Driver package installed on device" -or $outputText -match "instalado en el dispositivo") {
+            Write-Host "✓✓✓ ¡INSTALACIÓN EXITOSA! ✓✓✓" -ForegroundColor Green
+            Write-Host "El driver se instaló correctamente. Conecta tu dispositivo." -ForegroundColor Cyan
+        }
+        elseif ($outputText -match "ya está instalado|already installed|already published") {
+            Write-Host "✓ El driver ya estaba instalado en el sistema" -ForegroundColor Cyan
+        }
+        else {
+            # Esto cubre casos donde solo se confirmó la adición, pero no la instalación final.
+            Write-Host "✓ El paquete del driver fue agregado exitosamente al almacén de Windows." -ForegroundColor Cyan
+            Write-Host "Conecta tu dispositivo para que se complete la instalación." -ForegroundColor Yellow
+        }
     }
     elseif ($outputText -match "error|failed|falló|hash") {
         Write-Host ""
@@ -90,9 +98,9 @@ try {
         Write-Host "El driver no pudo ser instalado por un error de firma o archivos faltantes." -ForegroundColor Red
     }
     else {
-         # Si no podemos detectar el éxito o el fracaso, mostramos la advertencia.
+         # Si no podemos detectar el éxito o el fracaso, mostramos la advertencia original.
          Write-Host "⚠ Advertencia: No se pudo confirmar el estado exacto." -ForegroundColor Yellow
-         Write-Host "Revisa la salida de PnPUtil arriba, si dice 'successfully added' o 'agregado correctamente', puedes ignorar esta advertencia." -ForegroundColor Yellow
+         Write-Host "Revisa la salida de PnPUtil arriba para confirmar si la instalación fue exitosa (si dice 'successfully added' o similar, puedes ignorar esta advertencia)." -ForegroundColor Yellow
     }
 
 } catch {
