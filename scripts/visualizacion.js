@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	const resetButton = document.getElementById('resetButton');
 	const saveButton = document.getElementById('saveButton');
 
+	const profColors = []; // Colores dinámicos para cada barra de profundidad
+
 	const fullFreqData = [];
 	const fullProfData = [];
 	const fullLabels = [];
@@ -33,8 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	const freqIdealMin = 100;
 	const freqIdealMax = 120;
-	const profIdealMin = 5;
-	const profIdealMax = 6;
+	const profIdealMin = 40;
+	const profIdealMax = 60;
 
 	// Configuración descargas de csv
 	const MAX_CSV_FILES = 100;
@@ -58,9 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		datasets: [{
 			label: 'Profundidad',
 			data: [],
-			backgroundColor: 'rgba(255, 99, 132, 0.5)',
+			backgroundColor: profColors, // usamos el array dinámico
 		}]
 	};
+
 
 	const pieData = {
 		labels: ['Ejecución Correcta', 'E. Incorrecta'],
@@ -112,11 +115,22 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 
 	const profChart = new Chart(profCtx, {
-		type: 'bar',
-		data: profData,
-		options: { responsive: true, plugins: { legend: { position: 'top' } } },
-		plugins: [rangePlugin]
-	});
+	type: 'bar',
+	data: profData,
+	options: { 
+		responsive: true, 
+		plugins: { legend: { position: 'top' } },
+		scales: {
+			y: {
+				min: 0,       // valor mínimo fijo
+				max: 80,      // valor máximo fijo
+				reverse: true // eje invertido: 0 arriba, 80 abajo
+			}
+		}
+	},
+	plugins: [rangePlugin]
+});
+
 
 	const pieChart = new Chart(pieCtx, { type: 'pie', data: pieData });
 	const handPosChart = new Chart(handPosCtx, { type: 'doughnut', data: handPosData });
@@ -323,65 +337,80 @@ document.addEventListener('DOMContentLoaded', () => {
 	window.saveCharts = saveCharts;
 
 	function handleDataForVisualization(parsedData) {
-		if (isPaused) return;
+	if (isPaused) return;
 
-		const freq = parsedData.freq || 0;
-		const prof = parsedData.profundidad || 0;
-		const handPos = parsedData.handPosition || 'N/A';
+	const freq = parsedData.freq || 0;
+	const prof = parsedData.profundidad || 0;
+	const handPos = parsedData.handPosition || 'N/A';
 
-		if (handPos === "OK") startTracking = true;
-		if (!startTracking) return;
+	if (handPos === "OK") startTracking = true;
+	if (!startTracking) return;
 
-		globalCounter++;
+	globalCounter++;
 
-		if (freqData.labels.length >= 7) {
-			freqData.labels.shift();
-			freqData.datasets[0].data.shift();
-			profData.labels.shift();
-			profData.datasets[0].data.shift();
-		}
+	// --- Primero calculamos si los valores son correctos ---
+	const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
+	const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
+	const isHandOK = handPos === 'OK';
+	handPositionHistory.push(handPos);
 
-		freqData.labels.push(globalCounter);
-		profData.labels.push(globalCounter);
-		freqData.datasets[0].data.push(freq);
-		profData.datasets[0].data.push(prof);
+	// --- Ventana deslizante de 7 puntos ---
+	if (freqData.labels.length >= 7) {
+		freqData.labels.shift();
+		freqData.datasets[0].data.shift();
 
-		fullLabels.push(globalCounter);
-		fullFreqData.push(freq);
-		fullProfData.push(prof);
-
-		recordedData.push({
-			timestamp: new Date().toISOString(),
-			frecuencia: freq,
-			profundidad: prof,
-			posicionMano: handPos
-		});
-
-		const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
-		const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
-		const isHandOK = handPos === 'OK';
-		handPositionHistory.push(handPos);
-
-		if (isFreqCorrect && isProfCorrect && isHandOK) {
-			correctExecutions++;
-		} else {
-			incorrectExecutions++;
-		}
-
-		pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
-		handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
-
-		updateCharts();
-
-		if (receivedDataElement) {
-			receivedDataElement.innerHTML = `
-				<strong>Datos Recibidos:</strong><br>
-				Posición de la Mano: ${handPos}<br>
-				Profundidad: ${prof}<br>
-				Frecuencia: ${freq}
-			`;
-		}
+		profData.labels.shift();
+		profData.datasets[0].data.shift();
+		profColors.shift(); // también shift del color correspondiente
 	}
+
+	// --- Agregar nuevo punto ---
+	freqData.labels.push(globalCounter);
+	profData.labels.push(globalCounter);
+	freqData.datasets[0].data.push(freq);
+	profData.datasets[0].data.push(prof);
+
+	// --- Color de la barra según si la profundidad es correcta ---
+	profColors.push(
+		isProfCorrect
+			? 'rgba(0, 200, 0, 0.7)'         // verde si está entre 40 y 60
+			: 'rgba(255, 99, 132, 0.5)'     // color original si no
+	);
+
+	// --- Guardar datos completos para los gráficos del popup / CSV ---
+	fullLabels.push(globalCounter);
+	fullFreqData.push(freq);
+	fullProfData.push(prof);
+
+	recordedData.push({
+		timestamp: new Date().toISOString(),
+		frecuencia: freq,
+		profundidad: prof,
+		posicionMano: handPos
+	});
+
+	// --- Cálculo de ejecuciones correctas/incorrectas ---
+	if (isFreqCorrect && isProfCorrect && isHandOK) {
+		correctExecutions++;
+	} else {
+		incorrectExecutions++;
+	}
+
+	pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
+	handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
+
+	updateCharts();
+
+	if (receivedDataElement) {
+		receivedDataElement.innerHTML = `
+			<strong>Datos Recibidos:</strong><br>
+			Posición de la Mano: ${handPos}<br>
+			Profundidad: ${prof}<br>
+			Frecuencia: ${freq}
+		`;
+	}
+}
+
 
 	window.updateVisualization = function updateVisualization(data) {
 		try {
