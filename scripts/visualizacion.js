@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	const freqIdealMin = 100;
 	const freqIdealMax = 120;
-	const profIdealMin = 40;
+	const profIdealMin = 50;
 	const profIdealMax = 60;
 
 	// Configuración descargas de csv
@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		options: { 
 			responsive: true, 
 			plugins: { legend: { position: 'top' } },
-			scales: { y: { min: 0, max: 210 } }
+			scales: { y: { min: 70, max: 140 } }
 		},
 		plugins: [rangePlugin]
 	});
@@ -122,8 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		plugins: { legend: { position: 'top' } },
 		scales: {
 			y: {
-				min: 0,       // valor mínimo fijo
-				max: 80,      // valor máximo fijo
+				min: 30,       // valor mínimo fijo
+				max: 70,      // valor máximo fijo
 				reverse: true // eje invertido: 0 arriba, 80 abajo
 			}
 		}
