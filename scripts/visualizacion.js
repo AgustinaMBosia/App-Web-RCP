@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	const resetButton = document.getElementById('resetButton');
 	const saveButton = document.getElementById('saveButton');
 
-	const profColors = []; // Colores dinámicos para cada barra de profundidad
+	const profColors = [];
 
 	const fullFreqData = [];
 	const fullProfData = [];
@@ -38,11 +38,92 @@ document.addEventListener('DOMContentLoaded', () => {
 	const profIdealMin = 50;
 	const profIdealMax = 60;
 
-	// Configuración descargas de csv
 	const MAX_CSV_FILES = 100;
-	let savedFiles = []; // Guarda nombres y fechas
+	let savedFiles = [];
 	let savedDirHandle = null;
 
+	// ========== CREAR INDICADORES DE DATOS ==========
+	function createDataBadge(canvasElement, badgeId) {
+		const container = canvasElement.parentElement;
+		
+		const badge = document.createElement('div');
+		badge.id = badgeId;
+		badge.style.cssText = `
+			display: block;
+			margin: 0 auto 10px auto;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			padding: 8px 14px;
+			border-radius: 8px;
+			font-size: 14px;
+			font-weight: bold;
+			box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+			transition: all 0.3s ease;
+			min-width: 80px;
+			max-width: fit-content;
+			text-align: center;
+		`;
+		badge.innerHTML = `<span>--</span>`;
+		container.insertBefore(badge, canvasElement);
+		return badge;
+	}
+
+	// Crear badges para cada gráfico
+	const freqBadge = createDataBadge(freqCanvas, 'freqBadge');
+	const profBadge = createDataBadge(profCanvas, 'profBadge');
+	const pieBadge = createDataBadge(pieCanvas, 'pieBadge');
+	const handPosBadge = createDataBadge(handPosCanvas, 'handPosBadge');
+
+	// Función para actualizar los badges con animación
+	function updateBadge(badge, value, unit, isCorrect) {
+		badge.innerHTML = `<span>${value} ${unit}</span>`;
+		
+		if (isCorrect === true) {
+			badge.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+		} else if (isCorrect === false) {
+			badge.style.background = 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
+		} else {
+			badge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+		}
+		
+		badge.style.transform = 'scale(1.1)';
+		setTimeout(() => {
+			badge.style.transform = 'scale(1)';
+		}, 150);
+	}
+
+	function updateHandPosBadge(badge, handPos) {
+		const isOK = handPos === 'OK';
+		badge.innerHTML = `<span>Manos: ${handPos}</span>`;
+		badge.style.background = isOK 
+			? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
+			: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
+		
+		badge.style.transform = 'scale(1.1)';
+		setTimeout(() => {
+			badge.style.transform = 'scale(1)';
+		}, 150);
+	}
+
+	function updatePieBadge(badge, correct, incorrect) {
+		const total = correct + incorrect;
+		const percentage = total > 0 ? ((correct / total) * 100).toFixed(1) : 0;
+		badge.innerHTML = `<span>${percentage}%</span>`;
+		
+		if (percentage >= 80) {
+			badge.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+		} else if (percentage >= 50) {
+			badge.style.background = 'linear-gradient(135deg, #f7971e 0%, #ffd200 100%)';
+		} else {
+			badge.style.background = 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
+		}
+		
+		badge.style.transform = 'scale(1.1)';
+		setTimeout(() => {
+			badge.style.transform = 'scale(1)';
+		}, 150);
+	}
+	// ================================================
 
 	const freqData = {
 		labels: [],
@@ -60,10 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
 		datasets: [{
 			label: 'Profundidad',
 			data: [],
-			backgroundColor: profColors, // usamos el array dinámico
+			backgroundColor: profColors,
 		}]
 	};
-
 
 	const pieData = {
 		labels: ['Ejecución Correcta', 'E. Incorrecta'],
@@ -115,25 +195,56 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 
 	const profChart = new Chart(profCtx, {
-	type: 'bar',
-	data: profData,
-	options: { 
-		responsive: true, 
-		plugins: { legend: { position: 'top' } },
-		scales: {
-			y: {
-				min: 30,       // valor mínimo fijo
-				max: 70,      // valor máximo fijo
-				reverse: true // eje invertido: 0 arriba, 80 abajo
+		type: 'bar',
+		data: profData,
+		options: { 
+			responsive: true, 
+			plugins: { legend: { position: 'top' } },
+			scales: {
+				y: {
+					min: 30,
+					max: 70,
+					reverse: true
+				}
 			}
+		},
+		plugins: [rangePlugin]
+	});
+
+	const pieChart = new Chart(pieCtx, { 
+		type: 'pie', 
+		data: pieData,
+		options: {
+			responsive: true,
+			maintainAspectRatio: true,
+			plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
 		}
-	},
-	plugins: [rangePlugin]
-});
+	});
+	const handPosChart = new Chart(handPosCtx, { 
+		type: 'doughnut', 
+		data: handPosData,
+		options: {
+			responsive: true,
+			maintainAspectRatio: true,
+			plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+		}
+	});
 
-
-	const pieChart = new Chart(pieCtx, { type: 'pie', data: pieData });
-	const handPosChart = new Chart(handPosCtx, { type: 'doughnut', data: handPosData });
+	// Reducir tamaño de los canvas de pie y doughnut
+	pieCanvas.style.maxWidth = '180px';
+	pieCanvas.style.maxHeight = '180px';
+	handPosCanvas.style.maxWidth = '180px';
+	handPosCanvas.style.maxHeight = '180px';
+	
+	// Aplicar estilos uniformes a ambos contenedores
+	[pieCanvas, handPosCanvas].forEach(canvas => {
+		const container = canvas.parentElement;
+		container.style.display = 'flex';
+		container.style.flexDirection = 'column';
+		container.style.alignItems = 'center';
+		container.style.justifyContent = 'flex-start';
+		container.style.height = '250px';
+	});
 
 	function updateCharts() {
 		if (!isPaused) {
@@ -144,8 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 
-
-		(async () => {
+	(async () => {
 		try {
 			const storedDir = localStorage.getItem("savedDirHandle");
 			if (storedDir) {
@@ -168,14 +278,12 @@ document.addEventListener('DOMContentLoaded', () => {
 		const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 
 		try {
-			// (1) Verificar si ya hay carpeta guardada
 			if (!savedDirHandle) {
 				savedDirHandle = await window.showDirectoryPicker();
 				localStorage.setItem("savedDirHandle", JSON.stringify(savedDirHandle.name));
 				console.log("💾 Carpeta guardada en localStorage:", savedDirHandle.name);
 			}
 
-			// (2) Control de límite de archivos
 			if (savedFiles.length >= MAX_CSV_FILES) {
 				savedFiles.sort((a, b) => a.date - b.date);
 				const oldest = savedFiles.shift();
@@ -187,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
 				}
 			}
 
-			// (3) Guardar nuevo archivo CSV
 			const fileName = `maniobra_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
 			const fileHandle = await savedDirHandle.getFileHandle(fileName, { create: true });
 			const writable = await fileHandle.createWritable();
@@ -195,13 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
 			await writable.close();
 
 			savedFiles.push({ name: fileName, date: new Date() });
-			alert('Se ha guardado correctamente')
-
-			
+			alert('Se ha guardado correctamente');
 		} catch (err) {
 			console.error("❌ Error guardando CSV:", err);
 
-			// Si se revocó el permiso, volver a pedir carpeta
 			if (err.name === "SecurityError" || err.name === "NotAllowedError") {
 				localStorage.removeItem("savedDirHandle");
 				savedDirHandle = null;
@@ -211,8 +315,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			}
 		}
 	}
-
-
 
 	function resetCharts() {
 		globalCounter = 0;
@@ -233,6 +335,16 @@ document.addEventListener('DOMContentLoaded', () => {
 		startTracking = false;
 		handPositionHistory.length = 0;
 		recordedData.length = 0;
+
+		// Reset badges
+		freqBadge.innerHTML = '<span>--</span>';
+		profBadge.innerHTML = '<span>--</span>';
+		pieBadge.innerHTML = '<span>--%</span>';
+		handPosBadge.innerHTML = '<span>--</span>';
+		freqBadge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+		profBadge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+		pieBadge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+		handPosBadge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
 		updateCharts();
 
@@ -279,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			confirmButtonText: 'Nueva Maniobra',
 			denyButtonText: 'Cerrar',
 			cancelButtonText: 'Guardar CSV',
-			preCancel: () => false,  // Prevent closing on cancel
+			preCancel: () => false,
 			didOpen: () => {
 				new Chart(document.getElementById('piePreview').getContext('2d'), {
 					type: 'pie',
@@ -302,7 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
 					options: { responsive: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
 				});
 
-				// Agrega el evento al botón "Guardar CSV"
 				const swalButtons = document.querySelectorAll('.swal2-cancel');
 				swalButtons.forEach(btn => {
 					btn.onclick = (e) => {
@@ -315,7 +426,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			}
 		}).then((result) => {
 			if (result.isConfirmed) {
-				// 🔄 Nueva maniobra
 				resetCharts();
 			} else if (result.isDenied) {
 				if (typeof window.closeSerialConnection === 'function') {
@@ -337,80 +447,80 @@ document.addEventListener('DOMContentLoaded', () => {
 	window.saveCharts = saveCharts;
 
 	function handleDataForVisualization(parsedData) {
-	if (isPaused) return;
+		if (isPaused) return;
 
-	const freq = parsedData.freq || 0;
-	const prof = parsedData.profundidad || 0;
-	const handPos = parsedData.handPosition || 'N/A';
+		const freq = parsedData.freq || 0;
+		const prof = parsedData.profundidad || 0;
+		const handPos = parsedData.handPosition || 'N/A';
 
-	if (handPos === "OK") startTracking = true;
-	if (!startTracking) return;
+		if (handPos === "OK") startTracking = true;
+		if (!startTracking) return;
 
-	globalCounter++;
+		globalCounter++;
 
-	// --- Primero calculamos si los valores son correctos ---
-	const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
-	const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
-	const isHandOK = handPos === 'OK';
-	handPositionHistory.push(handPos);
+		const isFreqCorrect = freq >= freqIdealMin && freq <= freqIdealMax;
+		const isProfCorrect = prof >= profIdealMin && prof <= profIdealMax;
+		const isHandOK = handPos === 'OK';
+		handPositionHistory.push(handPos);
 
-	// --- Ventana deslizante de 7 puntos ---
-	if (freqData.labels.length >= 7) {
-		freqData.labels.shift();
-		freqData.datasets[0].data.shift();
+		// ========== ACTUALIZAR BADGES ==========
+		updateBadge(freqBadge, freq, 'cpm', isFreqCorrect);
+		updateBadge(profBadge, prof, 'mm', isProfCorrect);
+		updatePieBadge(pieBadge, correctExecutions, incorrectExecutions);
+		updateHandPosBadge(handPosBadge, handPos);
+		// =======================================
 
-		profData.labels.shift();
-		profData.datasets[0].data.shift();
-		profColors.shift(); // también shift del color correspondiente
+		if (freqData.labels.length >= 7) {
+			freqData.labels.shift();
+			freqData.datasets[0].data.shift();
+
+			profData.labels.shift();
+			profData.datasets[0].data.shift();
+			profColors.shift();
+		}
+
+		freqData.labels.push(globalCounter);
+		profData.labels.push(globalCounter);
+		freqData.datasets[0].data.push(freq);
+		profData.datasets[0].data.push(prof);
+
+		profColors.push(
+			isProfCorrect
+				? 'rgba(0, 200, 0, 0.7)'
+				: 'rgba(255, 99, 132, 0.5)'
+		);
+
+		fullLabels.push(globalCounter);
+		fullFreqData.push(freq);
+		fullProfData.push(prof);
+
+		recordedData.push({
+			timestamp: new Date().toISOString(),
+			frecuencia: freq,
+			profundidad: prof,
+			posicionMano: handPos
+		});
+
+		if (isFreqCorrect && isProfCorrect && isHandOK) {
+			correctExecutions++;
+		} else {
+			incorrectExecutions++;
+		}
+
+		pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
+		handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
+
+		updateCharts();
+
+		if (receivedDataElement) {
+			receivedDataElement.innerHTML = `
+				<strong>Datos Recibidos:</strong><br>
+				Posición de la Mano: ${handPos}<br>
+				Profundidad: ${prof}<br>
+				Frecuencia: ${freq}
+			`;
+		}
 	}
-
-	// --- Agregar nuevo punto ---
-	freqData.labels.push(globalCounter);
-	profData.labels.push(globalCounter);
-	freqData.datasets[0].data.push(freq);
-	profData.datasets[0].data.push(prof);
-
-	// --- Color de la barra según si la profundidad es correcta ---
-	profColors.push(
-		isProfCorrect
-			? 'rgba(0, 200, 0, 0.7)'         // verde si está entre 40 y 60
-			: 'rgba(255, 99, 132, 0.5)'     // color original si no
-	);
-
-	// --- Guardar datos completos para los gráficos del popup / CSV ---
-	fullLabels.push(globalCounter);
-	fullFreqData.push(freq);
-	fullProfData.push(prof);
-
-	recordedData.push({
-		timestamp: new Date().toISOString(),
-		frecuencia: freq,
-		profundidad: prof,
-		posicionMano: handPos
-	});
-
-	// --- Cálculo de ejecuciones correctas/incorrectas ---
-	if (isFreqCorrect && isProfCorrect && isHandOK) {
-		correctExecutions++;
-	} else {
-		incorrectExecutions++;
-	}
-
-	pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
-	handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
-
-	updateCharts();
-
-	if (receivedDataElement) {
-		receivedDataElement.innerHTML = `
-			<strong>Datos Recibidos:</strong><br>
-			Posición de la Mano: ${handPos}<br>
-			Profundidad: ${prof}<br>
-			Frecuencia: ${freq}
-		`;
-	}
-}
-
 
 	window.updateVisualization = function updateVisualization(data) {
 		try {
