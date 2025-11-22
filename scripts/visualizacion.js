@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		badge.style.cssText = `
 			display: block;
 			margin: 0 auto 10px auto;
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			background: linear-gradient(135deg, #667eea 0%, #667eea 100%);
 			color: white;
 			padding: 8px 14px;
 			border-radius: 8px;
