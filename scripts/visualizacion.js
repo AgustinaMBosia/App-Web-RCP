@@ -55,11 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
 			color: white;
 			padding: 8px 14px;
 			border-radius: 8px;
-			font-size: 14px;
+			font-size: 40px;
 			font-weight: bold;
 			box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 			transition: all 0.3s ease;
-			min-width: 80px;
+			min-width: 150px;
 			max-width: fit-content;
 			text-align: center;
 		`;
@@ -75,12 +75,15 @@ document.addEventListener('DOMContentLoaded', () => {
 	const handPosBadge = createDataBadge(handPosCanvas, 'handPosBadge');
 
 	// Función para actualizar los badges con animación
-	function updateBadge(badge, value, unit, isCorrect) {
+	function updateBadge(badge, value, unit, isCorrect, idealMin) {
 		badge.innerHTML = `<span>${value} ${unit}</span>`;
 		
 		if (isCorrect === true) {
 			badge.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
 		} else if (isCorrect === false) {
+			if (value < idealMin) {
+				badge.style.background = 'linear-gradient(135deg, #f7971e 0%, #ffd200 100%)';
+			} else
 			badge.style.background = 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
 		} else {
 			badge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
@@ -226,7 +229,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		options: {
 			responsive: true,
 			maintainAspectRatio: true,
-			plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+			animation: false,               // sin animación
+			plugins: { legend: { display: false } }, // ocultar leyenda
+			hover: { mode: null },          // desactivar hover
+			events: []                      // desactivar interacciones
 		}
 	});
 
@@ -464,8 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		handPositionHistory.push(handPos);
 
 		// ========== ACTUALIZAR BADGES ==========
-		updateBadge(freqBadge, freq, 'cpm', isFreqCorrect);
-		updateBadge(profBadge, prof, 'mm', isProfCorrect);
+		updateBadge(freqBadge, freq, 'cpm', isFreqCorrect, freqIdealMin);
+		updateBadge(profBadge, prof, 'mm', isProfCorrect, profIdealMin);
 		updatePieBadge(pieBadge, correctExecutions, incorrectExecutions);
 		updateHandPosBadge(handPosBadge, handPos);
 		// =======================================
@@ -512,14 +518,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		updateCharts();
 
-		if (receivedDataElement) {
-			receivedDataElement.innerHTML = `
-				<strong>Datos Recibidos:</strong><br>
-				Posición de la Mano: ${handPos}<br>
-				Profundidad: ${prof}<br>
-				Frecuencia: ${freq}
-			`;
-		}
+		// if (receivedDataElement) {
+		// 	receivedDataElement.innerHTML = `
+		// 		<strong>Datos Recibidos:</strong><br>
+		// 		Posición de la Mano: ${handPos}<br>
+		// 		Profundidad: ${prof}<br>
+		// 		Frecuencia: ${freq}
+		// 	`;
+		// }
 	}
 
 	window.updateVisualization = function updateVisualization(data) {

@@ -170,14 +170,14 @@ function processData(text) {
     if (match) {
         const [, handPos, profStr, freqStr] = match;
         window.handsOk = (handPos === 'OK');
-        if (receivedDataElement) {
-            receivedDataElement.innerHTML = `
-                <strong>Datos Recibidos:</strong><br>
-                Posición de la Mano: ${handPos}<br>
-                Profundidad: ${profStr}<br>
-                Frecuencia: ${freqStr}
-            `;
-        }
+        // if (receivedDataElement) {
+        //     receivedDataElement.innerHTML = `
+        //         <strong>Datos Recibidos:</strong><br>
+        //         Posición de la Mano: ${handPos}<br>
+        //         Profundidad: ${profStr}<br>
+        //         Frecuencia: ${freqStr}
+        //     `;
+        // }
 
         const processed = {
             handPosition: handPos,
@@ -203,14 +203,14 @@ function processSensorData(sensorBytes) {
     window.handsOk = (manoOK === 'OK');
 
     const receivedDataElement = document.getElementById('receivedData');
-    if (receivedDataElement) {
-        receivedDataElement.innerHTML = `
-            <strong>Datos Recibidos:</strong><br>
-            Posición de la Mano: ${manoOK}<br>
-            Profundidad: ${profundidadVal}<br>
-            Frecuencia: ${frecuenciaVal}
-        `;
-    }
+    // if (receivedDataElement) {
+    //     receivedDataElement.innerHTML = `
+    //         <strong>Datos Recibidos:</strong><br>
+    //         Posición de la Mano: ${manoOK}<br>
+    //         Profundidad: ${profundidadVal}<br>
+    //         Frecuencia: ${frecuenciaVal}
+    //     `;
+    // }
 
     const processed = {
         handPosition: manoOK,
