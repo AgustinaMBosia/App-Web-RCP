@@ -493,7 +493,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		profColors.push(
 			isProfCorrect
 				? 'rgba(0, 200, 0, 0.7)'
-				: 'rgba(255, 99, 132, 0.5)'
+				: (prof < profIdealMin
+					? 'rgba(247, 151, 30, 0.7)'  // amarillo/naranja si es menor que el mínimo ideal
+					: 'rgba(235, 51, 73, 0.7)'    // rojo si es mayor
+				  )
 		);
 
 		fullLabels.push(globalCounter);

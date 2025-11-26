@@ -784,7 +784,7 @@ window.restartSerialLoop = function () {
         }, 250);
         log('▶️ Loop serial reiniciado en restartSerialLoop()');
     } else {
-        log('ℹ️ restartSerialLoop: no hay puerto serial abierto, solo reseteo de estados');
+        log('restartSerialLoop: no hay puerto serial abierto, solo reseteo de estados');
     }
 };
 
