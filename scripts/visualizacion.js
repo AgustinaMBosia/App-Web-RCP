@@ -32,6 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
 	let globalCounter = 0;
 	let isPaused = false;
 	let startTracking = false;
+	let hasNonZeroFreq = false; // para mostrar F=0 solo al inicio de la maniobra
+	let pastFreq = 0;
+	let pastProf = 0;
+	let ContadorCeros = 0;
+	let zeroAlertShown = false; // para no repetir el popup de ceros en la misma maniobra
+
 
 	const freqIdealMin = 100;
 	const freqIdealMax = 120;
@@ -340,6 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		handPosData.datasets[0].data = [1, 0];
 		startTracking = false;
 		handPositionHistory.length = 0;
+		hasNonZeroFreq = false;
+		pastFreq = 0;
+		pastProf = 0;
+		ContadorCeros = 0;
+		zeroAlertShown = false;
 		recordedData.length = 0;
 
 		// Reset badges
@@ -397,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			confirmButtonText: 'Nueva Maniobra',
 			denyButtonText: 'Cerrar',
 			cancelButtonText: 'Guardar CSV',
-			preCancel: () => false,
+			// preCancel: () => false,
 			didOpen: () => {
 				new Chart(document.getElementById('piePreview').getContext('2d'), {
 					type: 'pie',
@@ -455,12 +466,57 @@ document.addEventListener('DOMContentLoaded', () => {
 	function handleDataForVisualization(parsedData) {
 		if (isPaused) return;
 
-		const freq = parsedData.freq || 0;
-		const prof = parsedData.profundidad || 0;
+		let freq = parsedData.freq || 0;
+		let prof = parsedData.profundidad || 0;
 		const handPos = parsedData.handPosition || 'N/A';
 
 		if (handPos === "OK") startTracking = true;
 		if (!startTracking) return;
+
+		// Aceptar frecuencia 0 solo antes de que aparezca la primera frecuencia distinta de 0.
+		// Una vez que ya hubo alguna frecuencia > 0, se ignoran los nuevos datos con frecuencia 0.
+		if (freq > 0) {
+			// Si ya habíamos mostrado el popup de datos repetidos y ahora llega una frecuencia distinta,
+			// cerramos automáticamente el popup (si sigue abierto) y preparamos el sistema
+			// para poder volver a mostrarlo si más adelante se repiten datos otra vez.
+			if (freq !== pastFreq) {
+				if (zeroAlertShown && window.Swal) {
+					Swal.close();
+				}
+				zeroAlertShown = false;
+				ContadorCeros = 0;
+			}
+
+			hasNonZeroFreq = true;
+		} else if (hasNonZeroFreq && freq === 0) {
+			// Ya estamos en la maniobra (hubo F>0) y este dato tiene F=0 → usar la última frecuencia y profundidad válidas
+			// y contar cuántos ceros seguidos están llegando.
+			freq = pastFreq;
+			prof = pastProf;
+			ContadorCeros++;
+
+
+			// Si se han recibido N muestras consecutivas con F=0 (pero mostramos la última válida),
+			// avisamos de posible fallo de frecuencia SOLO una vez por maniobra.
+			if (!zeroAlertShown && ContadorCeros === 3) {
+				if (window.Swal) {
+					Swal.fire({
+						title: "maniobra detenida",
+						text: "retome la maniobra",
+						icon: "warning",
+						confirmButtonText: "Aceptar"
+					});
+				} else {
+					alert("⚠️ Posible fallo en la frecuencia: demasiados valores de frecuencia 0 seguidos.");
+				}
+				// Marcamos que ya se mostró el popup para no repetirlo en esta maniobra.
+				zeroAlertShown = true;
+				return;
+			}
+		} else {
+			// Si la frecuencia vuelve a ser distinta de 0, reseteamos el contador de ceros.
+			ContadorCeros = 0;
+		}
 
 		globalCounter++;
 
@@ -518,6 +574,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 		pieData.datasets[0].data = [correctExecutions, incorrectExecutions];
 		handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
+
+		pastFreq = freq;
+		pastProf = prof;
 
 		updateCharts();
 
