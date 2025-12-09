@@ -32,12 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
 	let globalCounter = 0;
 	let isPaused = false;
 	let startTracking = false;
-	let hasNonZeroFreq = false; // para mostrar F=0 solo al inicio de la maniobra
+	let hasNonZeroFreq = false;
 	let pastFreq = 0;
 	let pastProf = 0;
 	let ContadorCeros = 0;
-	let zeroAlertShown = false; // para no repetir el popup de ceros en la misma maniobra
-
+	let zeroAlertShown = false;
 
 	const freqIdealMin = 100;
 	const freqIdealMax = 120;
@@ -47,6 +46,66 @@ document.addEventListener('DOMContentLoaded', () => {
 	const MAX_CSV_FILES = 100;
 	let savedFiles = [];
 	let savedDirHandle = null;
+
+	// ========== CÍRCULO DE ESPERA ==========
+	let waitingCircle = null;
+
+	function createWaitingCircle() {
+		if (waitingCircle) return; // Ya existe
+
+		waitingCircle = document.createElement('div');
+		waitingCircle.id = 'waitingCircle';
+		waitingCircle.style.cssText = `
+			position: fixed;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			width: 150px;
+			height: 150px;
+			background: linear-gradient(135deg, #ff0000ff 0%, #ff0000ff 100%);
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: white;
+			font-size: 18px;
+			font-weight: bold;
+			text-align: center;
+			box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+			z-index: 9999;
+			animation: pulse120 0.5s ease-in-out infinite;
+		`;
+		waitingCircle.innerHTML = 'Calculando<br>Frecuencia y Profundidad...';
+
+		// Agregar animación de pulso a 120 BPM (0.5s = 120 latidos por minuto)
+		if (!document.getElementById('pulseAnimation')) {
+			const style = document.createElement('style');
+			style.id = 'pulseAnimation';
+			style.textContent = `
+				@keyframes pulse120 {
+					0%, 100% {
+						transform: translate(-50%, -50%) scale(1);
+						opacity: 1;
+					}
+					50% {
+						transform: translate(-50%, -50%) scale(1.15);
+						opacity: 0.7;
+					}
+				}
+			`;
+			document.head.appendChild(style);
+		}
+
+		document.body.appendChild(waitingCircle);
+	}
+
+	function removeWaitingCircle() {
+		if (waitingCircle) {
+			waitingCircle.remove();
+			waitingCircle = null;
+		}
+	}
+	// =======================================
 
 	// ========== CREAR INDICADORES DE DATOS ==========
 	function createDataBadge(canvasElement, badgeId) {
@@ -108,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
 			: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
 		
-		badge.style.transform = 'scale(1.1)';
+		badge.style.transform = 'scale(1)';
 		setTimeout(() => {
 			badge.style.transform = 'scale(1)';
 		}, 150);
@@ -198,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		options: { 
 			responsive: true, 
 			plugins: { legend: { position: 'top' } },
-			scales: { y: { min: 70, max: 140 } }
+			scales: { y: { min: 80, max: 140 } }
 		},
 		plugins: [rangePlugin]
 	});
@@ -235,10 +294,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		options: {
 			responsive: true,
 			maintainAspectRatio: true,
-			animation: false,               // sin animación
-			plugins: { legend: { display: false } }, // ocultar leyenda
-			hover: { mode: null },          // desactivar hover
-			events: []                      // desactivar interacciones
+			animation: false,
+			plugins: { legend: { display: false } },
+			hover: { mode: null },
+			events: []
 		}
 	});
 
@@ -363,6 +422,9 @@ document.addEventListener('DOMContentLoaded', () => {
 		pieBadge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 		handPosBadge.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
+		// Remover círculo de espera si existe
+		removeWaitingCircle();
+
 		updateCharts();
 
 		console.log("🔄 Iniciando nueva maniobra...");
@@ -408,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			confirmButtonText: 'Nueva Maniobra',
 			denyButtonText: 'Cerrar',
 			cancelButtonText: 'Guardar CSV',
-			// preCancel: () => false,
 			didOpen: () => {
 				new Chart(document.getElementById('piePreview').getContext('2d'), {
 					type: 'pie',
@@ -473,12 +534,24 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (handPos === "OK") startTracking = true;
 		if (!startTracking) return;
 
-		// Aceptar frecuencia 0 solo antes de que aparezca la primera frecuencia distinta de 0.
-		// Una vez que ya hubo alguna frecuencia > 0, se ignoran los nuevos datos con frecuencia 0.
+		// ========== MOSTRAR/OCULTAR CÍRCULO DE ESPERA ==========
+		// Mostrar círculo si aún no hay frecuencia válida
+		if (!hasNonZeroFreq && freq === 0) {
+			createWaitingCircle();
+			// Actualizar badges y handPos chart, pero no graficar freq/prof
+			const isHandOK = handPos === 'OK';
+			handPositionHistory.push(handPos);
+			updateHandPosBadge(handPosBadge, handPos);
+			handPosData.datasets[0].data = isHandOK ? [1, 0] : [0, 1];
+			handPosChart.update();
+			return; // No graficar frecuencia/profundidad hasta que haya frecuencia válida
+		}
+
 		if (freq > 0) {
-			// Si ya habíamos mostrado el popup de datos repetidos y ahora llega una frecuencia distinta,
-			// cerramos automáticamente el popup (si sigue abierto) y preparamos el sistema
-			// para poder volver a mostrarlo si más adelante se repiten datos otra vez.
+			// Primera frecuencia válida detectada - quitar círculo
+			removeWaitingCircle();
+
+			// Si antes había un popup de datos repetidos, lo cierra
 			if (freq !== pastFreq) {
 				if (zeroAlertShown && window.Swal) {
 					Swal.close();
@@ -489,15 +562,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			hasNonZeroFreq = true;
 		} else if (hasNonZeroFreq && freq === 0) {
-			// Ya estamos en la maniobra (hubo F>0) y este dato tiene F=0 → usar la última frecuencia y profundidad válidas
-			// y contar cuántos ceros seguidos están llegando.
+			// Ya estamos en la maniobra y llega F=0
 			freq = pastFreq;
 			prof = pastProf;
 			ContadorCeros++;
 
-
-			// Si se han recibido N muestras consecutivas con F=0 (pero mostramos la última válida),
-			// avisamos de posible fallo de frecuencia SOLO una vez por maniobra.
 			if (!zeroAlertShown && ContadorCeros === 3) {
 				if (window.Swal) {
 					Swal.fire({
@@ -509,14 +578,13 @@ document.addEventListener('DOMContentLoaded', () => {
 				} else {
 					alert("⚠️ Posible fallo en la frecuencia: demasiados valores de frecuencia 0 seguidos.");
 				}
-				// Marcamos que ya se mostró el popup para no repetirlo en esta maniobra.
 				zeroAlertShown = true;
 				return;
 			}
 		} else {
-			// Si la frecuencia vuelve a ser distinta de 0, reseteamos el contador de ceros.
 			ContadorCeros = 0;
 		}
+		// ======================================================
 
 		globalCounter++;
 
@@ -550,8 +618,8 @@ document.addEventListener('DOMContentLoaded', () => {
 			isProfCorrect
 				? 'rgba(0, 200, 0, 0.7)'
 				: (prof < profIdealMin
-					? 'rgba(247, 151, 30, 0.7)'  // amarillo/naranja si es menor que el mínimo ideal
-					: 'rgba(235, 51, 73, 0.7)'    // rojo si es mayor
+					? 'rgba(247, 151, 30, 0.7)'
+					: 'rgba(235, 51, 73, 0.7)'
 				  )
 		);
 
@@ -579,15 +647,6 @@ document.addEventListener('DOMContentLoaded', () => {
 		pastProf = prof;
 
 		updateCharts();
-
-		// if (receivedDataElement) {
-		// 	receivedDataElement.innerHTML = `
-		// 		<strong>Datos Recibidos:</strong><br>
-		// 		Posición de la Mano: ${handPos}<br>
-		// 		Profundidad: ${prof}<br>
-		// 		Frecuencia: ${freq}
-		// 	`;
-		// }
 	}
 
 	window.updateVisualization = function updateVisualization(data) {

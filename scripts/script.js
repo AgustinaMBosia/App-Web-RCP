@@ -51,6 +51,8 @@ let samePacketCount = 0;
 let lastPacketId = null;
 let stuckTimeout = null;
 
+let contadormil = 0;
+
 
 
 const DEBUG = true;
@@ -346,10 +348,14 @@ function checkStuckPacket(currentId) {
 
 
 /* ---------- Simulación ---------- */
-function generateSimulatedData() {
+function generateSimulatedData(contadormil) {
     const handPosition = Math.random() > 0.5 ? 'OK' : 'NOK';
     const profundidad = Math.floor(Math.random() * 100);
-    const freq = Math.floor(Math.random() * 200) + 50;
+    freq = 0;
+    contadormil++;
+    if (contadormil > 30) {
+        const freq = Math.floor(Math.random() * 200) + 50;
+    }
     return `\nU${handPosition},P${profundidad},F${freq}:`;
 }
 
@@ -465,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Simulación detenida.');
             } else {
                 simulationInterval = setInterval(() => {
-                    const sim = generateSimulatedData();
+                    const sim = generateSimulatedData(contadormil);
                     processData(sim);
                 }, 500);
                 simulateButton.textContent = "⏸ Pausar simulación";
