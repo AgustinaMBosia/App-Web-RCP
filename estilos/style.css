@@ -45,6 +45,44 @@ p {
     gap: 15px;
     margin: 20px 0;
 }
+/* ---------- Progress bar ---------- */
+.progress-container {
+    display: none;
+    margin: 12px auto;
+    width: 80%;
+    max-width: 600px;
+}
+
+.progress-container label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.progress-background {
+    background: #ddd;
+    border-radius: 8px;
+    height: 20px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #4caf50, #ff9800);
+    transition: width 0.5s linear;
+}
+
+.progress-label {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.85em;
+    color: #555;
+    text-align: right;
+}
 
 button {
     padding: 10px 20px;
