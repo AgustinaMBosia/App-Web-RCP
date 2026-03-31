@@ -57,6 +57,8 @@ let contadormil = 0;
 
 const DEBUG = true;
 
+let prevState = null; 
+
 /* ---------- Utility helpers ---------- */
 function log(...args) { if (DEBUG) console.log(...args); }
 
@@ -77,16 +79,17 @@ function startProgressBar() {
     const container = document.getElementById('progressContainer');
     const bar = document.getElementById('progressBar');
     const label = document.getElementById('progressLabel');
-    console.log('empezo el timeout');
+
     if (!container || !bar) return;
+    if (progressInterval) return; // ← GUARD: ya está corriendo, no reiniciar
 
     progressSeconds = 0;
     bar.style.width = '0%';
     bar.style.background = 'linear-gradient(90deg, #4caf50, #ff9800)';
     if (label) label.textContent = `0s / ${PROGRESS_DURATION}s`;
     container.style.display = 'block';
+    console.log('empezo el timeout');
 
-    if (progressInterval) clearInterval(progressInterval);
     progressInterval = setInterval(() => {
         progressSeconds++;
         const pct = Math.min((progressSeconds / PROGRESS_DURATION) * 100, 100);
@@ -105,6 +108,7 @@ function startProgressBar() {
 }
 
 function stopProgressBar() {
+    console.log('🛑 STOP PROGRESS BAR');
     if (progressInterval) {
         clearInterval(progressInterval);
         progressInterval = null;
@@ -149,6 +153,7 @@ function resetAllStates() {
     window.handsOk = false;
     handsPopupOpen = false;
     window.handsPopupShownThisSession = false;
+    window.finishPopupShown = false;
     flagCierroPopup = false;
 
     idDestino = 0x00;
@@ -173,6 +178,7 @@ function resetAllStates() {
 
 /* ---------- Finish scheduling (protected by session) ---------- */
 function scheduleFinishOnce() {
+    console.log("🚀 scheduleFinishOnce llamado");
     if (finishScheduled || window.finishPopupShown) return;
     finishScheduled = true;
     startProgressBar(); // 👈 arranca la barra al programar el timeout
@@ -459,12 +465,19 @@ function runStateMachine() {
             return;
         }
         contadorUniversal++;
+        
+        //  DETECTOR DE ENTRADA A SEND_DATA
+        if (currentState === 'SEND_DATA' && prevState !== 'SEND_DATA') {
+            console.log('🚀 Entró a SEND_DATA → inicio timeout + barra');
+            scheduleFinishOnce();
+        }
+        prevState = currentState;
 
         switch (comando) {
             case 0x01:
                 sendToModule({ idDestino: cambioDeId, idPag, idOrigen: 0x01, comando, data });
+    
                 currentState = 'START';
-                clearFinishSchedule();
                 break;
             case 0x65:
                 sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x02, data });
@@ -481,6 +494,7 @@ function runStateMachine() {
                     currentState = 'SEND_DATA';
                     sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
                     console.log('empezo el timeout');
+                    scheduleFinishOnce();
                 }
                 if (data[0] === 0xFF) currentState = 'IDLE';
                 break;
@@ -501,6 +515,7 @@ function runStateMachine() {
                         currentState = 'SEND_DATA';
                         flagSendData = true;
                         console.log('empezo el timeout');
+                        scheduleFinishOnce();
                     }
                 } else {
                     if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
@@ -518,7 +533,7 @@ function runStateMachine() {
                     sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
                     checkStuckPacket(idPag);
                 }
-                //startProgressBar(); // 👈 arranca la barra para el timeout de 0x68
+                scheduleFinishOnce(); // 👈 arranca la barra para el timeout de 0x68
                 const timeoutSession = window.sessionId;
                 setTimeout(() => {
                     if (timeoutSession !== window.sessionId) return;
