@@ -17,6 +17,8 @@ let handPosition = null;
 let profundidad = null;
 let freq = null;
 
+let cambioDeId = 0x64;
+
 let visualizationWindow = null;
 
 let handsFlag = false;
@@ -53,8 +55,6 @@ let stuckTimeout = null;
 
 let contadormil = 0;
 
-
-
 const DEBUG = true;
 
 /* ---------- Utility helpers ---------- */
@@ -68,6 +68,52 @@ function calculateChecksum(arr) {
     return sum;
 }
 
+/* ---------- Progress bar ---------- */
+let progressInterval = null;
+let progressSeconds = 0;
+const PROGRESS_DURATION = 60;
+
+function startProgressBar() {
+    const container = document.getElementById('progressContainer');
+    const bar = document.getElementById('progressBar');
+    const label = document.getElementById('progressLabel');
+    console.log('empezo el timeout');
+    if (!container || !bar) return;
+
+    progressSeconds = 0;
+    bar.style.width = '0%';
+    bar.style.background = 'linear-gradient(90deg, #4caf50, #ff9800)';
+    if (label) label.textContent = `0s / ${PROGRESS_DURATION}s`;
+    container.style.display = 'block';
+
+    if (progressInterval) clearInterval(progressInterval);
+    progressInterval = setInterval(() => {
+        progressSeconds++;
+        const pct = Math.min((progressSeconds / PROGRESS_DURATION) * 100, 100);
+        bar.style.width = pct + '%';
+        if (label) label.textContent = `${progressSeconds}s / ${PROGRESS_DURATION}s`;
+
+        if (progressSeconds >= 50) {
+            bar.style.background = 'linear-gradient(90deg, #ff9800, #f44336)';
+        }
+
+        if (progressSeconds >= PROGRESS_DURATION) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+    }, 1000);
+}
+
+function stopProgressBar() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+    const container = document.getElementById('progressContainer');
+    if (container) container.style.display = 'none';
+    console.log('termino el timeout');
+}
+
 /* ---------- State / timers ---------- */
 function clearFinishSchedule() {
     if (finishTimeoutId) {
@@ -75,21 +121,20 @@ function clearFinishSchedule() {
         finishTimeoutId = null;
     }
     finishScheduled = false;
+    stopProgressBar(); // 👈 para y oculta la barra
 }
 
 function resetAllStates() {
     log('🔄 resetAllStates — invalidando session y limpiando timers');
-    // invalidar timers/handlers de sesiones viejas
     window.sessionId = (window.sessionId || 0) + 1;
 
-    // Limpiar intervalos/timeouts locales
     if (simulationInterval) { clearInterval(simulationInterval); simulationInterval = null; }
     if (bluetoothInterval) { clearInterval(bluetoothInterval); bluetoothInterval = null; }
     if (serialInterval) { clearInterval(serialInterval); serialInterval = null; }
     if (handsPopupIntervalId) { clearInterval(handsPopupIntervalId); handsPopupIntervalId = null; }
     clearFinishSchedule();
+    stopProgressBar(); // 👈 limpia barra en reset total
 
-    // Resetear variables
     lastBluetoothData = null;
     lastSerialData = null;
     previousSerialData = null;
@@ -130,6 +175,7 @@ function resetAllStates() {
 function scheduleFinishOnce() {
     if (finishScheduled || window.finishPopupShown) return;
     finishScheduled = true;
+    startProgressBar(); // 👈 arranca la barra al programar el timeout
 
     const thisSession = window.sessionId;
     finishTimeoutId = setTimeout(() => {
@@ -143,7 +189,7 @@ function scheduleFinishOnce() {
         if (currentState !== 'FINISH') {
             currentState = 'FINISH';
             sendToModule({
-                idDestino: 0x64,
+                idDestino: 0x66,
                 idPag: contadorUniversal,
                 idOrigen: 0x01,
                 comando: 0x05,
@@ -159,6 +205,7 @@ function scheduleFinishOnce() {
         comando = 0x01;
         finishTimeoutId = null;
         finishScheduled = false;
+        stopProgressBar(); // 👈 para la barra cuando termina el minuto
     }, 60000);
 }
 
@@ -172,14 +219,6 @@ function processData(text) {
     if (match) {
         const [, handPos, profStr, freqStr] = match;
         window.handsOk = (handPos === 'OK');
-        // if (receivedDataElement) {
-        //     receivedDataElement.innerHTML = `
-        //         <strong>Datos Recibidos:</strong><br>
-        //         Posición de la Mano: ${handPos}<br>
-        //         Profundidad: ${profStr}<br>
-        //         Frecuencia: ${freqStr}
-        //     `;
-        // }
 
         const processed = {
             handPosition: handPos,
@@ -205,14 +244,6 @@ function processSensorData(sensorBytes) {
     window.handsOk = (manoOK === 'OK');
 
     const receivedDataElement = document.getElementById('receivedData');
-    // if (receivedDataElement) {
-    //     receivedDataElement.innerHTML = `
-    //         <strong>Datos Recibidos:</strong><br>
-    //         Posición de la Mano: ${manoOK}<br>
-    //         Profundidad: ${profundidadVal}<br>
-    //         Frecuencia: ${frecuenciaVal}
-    //     `;
-    // }
 
     const processed = {
         handPosition: manoOK,
@@ -243,7 +274,7 @@ function abrirPopup() {
         showConfirmButton: true,
         allowOutsideClick: false,
         allowEscapeKey: false,
-		confirmButtonText: 'Terminar Maniobra',
+        confirmButtonText: 'Terminar Maniobra',
         didClose: () => {
             handsPopupOpen = false;
             if (handsPopupIntervalId) {
@@ -251,11 +282,11 @@ function abrirPopup() {
                 handsPopupIntervalId = null;
             }
         }
-		}).then((result) => {
-			if (result.isConfirmed) {
-				window.saveCharts();
-			}
-    	});
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.saveCharts();
+        }
+    });
 
     const thisSession = window.sessionId;
     handsPopupIntervalId = setInterval(() => {
@@ -318,7 +349,7 @@ function checkStuckPacket(currentId) {
         lastPacketId = currentId;
     }
 
-    if (samePacketCount >= 10) { // 10 ciclos (~2.5 s si intervalo=250ms)
+    if (samePacketCount >= 10) {
         samePacketCount = 0;
         lastPacketId = null;
 
@@ -335,7 +366,6 @@ function checkStuckPacket(currentId) {
                 alert("⚠️ Sin recepción de datos: la maniobra se ha detenido.");
             }
 
-            // Detiene la maniobra
             stopSerialLoop();
             currentState = 'FINISH';
             if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
@@ -345,7 +375,6 @@ function checkStuckPacket(currentId) {
         }, 500);
     }
 }
-
 
 /* ---------- Simulación ---------- */
 function generateSimulatedData(contadormil) {
@@ -372,13 +401,12 @@ function startSerialReadLoop() {
                 if (!value) continue;
                 for (let i = 0; i < value.length; i++) {
                     const byte = value[i];
-                    if (byte === 0x0D) { // CR end
+                    if (byte === 0x0D) {
                         if (buffer.length === 18) {
                             const packet = new Uint8Array(buffer);
                             const checksum = packet[17];
                             const calc = calculateChecksum(packet.slice(0, 17));
                             if (checksum === calc) {
-                                // parse packet
                                 const dirDestino1 = packet[0];
                                 const IDpaq = packet[2];
                                 const dirDestino2 = (packet[4] << 8) | packet[5];
@@ -389,7 +417,7 @@ function startSerialReadLoop() {
                                 comando = receivedComando;
                                 data = Array.from(receivedData);
                                 idPag = IDpaq;
-                                idOrigen = packet[6]; // low byte kept for compatibility
+                                idOrigen = packet[6];
                                 idDestino = dirDestino1;
                                 sendDataFlag = packet[14];
 
@@ -418,6 +446,128 @@ function startSerialReadLoop() {
             } catch (e) { /* ignore */ }
         }
     })();
+}
+
+/* ---------- State machine loop (shared between connect and restart) ---------- */
+function runStateMachine() {
+
+    const currentSession = window.sessionId;
+    return setInterval(() => {
+        if (currentSession !== window.sessionId) {
+            clearInterval(serialInterval);
+            serialInterval = null;
+            return;
+        }
+        contadorUniversal++;
+
+        switch (comando) {
+            case 0x01:
+                sendToModule({ idDestino: cambioDeId, idPag, idOrigen: 0x01, comando, data });
+                currentState = 'START';
+                clearFinishSchedule();
+                break;
+            case 0x65:
+                sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x02, data });
+                currentState = 'WAIT_CONFIRMATION';
+                break;
+            case 0x66:
+                if (data[0] !== 0x71) {
+                    sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
+                    currentState = 'WAIT_HANDS';
+                    abrirPopup();
+                } else {
+                    data[0] = 0x71;
+                    sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x66, data });
+                    currentState = 'SEND_DATA';
+                    sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
+                    console.log('empezo el timeout');
+                }
+                if (data[0] === 0xFF) currentState = 'IDLE';
+                break;
+
+            case 0x03:
+                if (!flagSendData) {
+                    if (flagCambio || count < 3) {
+                        data[0] = 0x71;
+                        sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x66, data });
+                        flagCambio = false;
+                        count++;
+                    } else {
+                        sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                        flagCambio = true;
+                        count = 0;
+                    }
+                    if (data[5] === 0x01) {
+                        currentState = 'SEND_DATA';
+                        flagSendData = true;
+                        console.log('empezo el timeout');
+                    }
+                } else {
+                    if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
+                        processSensorData(data);
+                        sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                        checkStuckPacket(idPag);
+                    }
+                    scheduleFinishOnce();
+                }
+                break;
+
+            case 0x68:
+                if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
+                    processSensorData(data);
+                    sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
+                    checkStuckPacket(idPag);
+                }
+                //startProgressBar(); // 👈 arranca la barra para el timeout de 0x68
+                const timeoutSession = window.sessionId;
+                setTimeout(() => {
+                    if (timeoutSession !== window.sessionId) return;
+                    currentState = 'FINISH';
+                    sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+                    stopProgressBar(); // 👈 para la barra al terminar
+                    if (!flagCierroPopup) {
+                        flagCierroPopup = true;
+                        if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
+                            window.finishPopupShown = true;
+                            window.saveCharts();
+                        }
+                    }
+                    comando = 0x01;
+                }, 60000);
+                break;
+
+            case 0x09:
+                if (window.Swal) {
+                    Swal.fire({
+                        title: "⚠️ bateria baja",
+                        text: "La maniobra no se puede ejecutarse por falta de bateria, conectar cargador.",
+                        icon: "warning",
+                        confirmButtonText: "Aceptar"
+                    });
+                } else {
+                    alert("⚠️ Sin bateria: la maniobra se ha detenido.");
+                }
+                stopSerialLoop();
+                currentState = 'FINISH';
+                break;
+
+            case 0x0A:
+            case 0x0B:
+                if (window.Swal) {
+                    Swal.fire({
+                        title: "⚠️ Falla en los sensores",
+                        text: "La maniobra no se puede ejecutar por falla en los sensores, llame a servicio técnico.",
+                        icon: "warning",
+                        confirmButtonText: "Aceptar"
+                    });
+                } else {
+                    alert("⚠️ falla en los sensores.");
+                }
+                stopSerialLoop();
+                currentState = 'FINISH';
+                break;
+        }
+    }, 250);
 }
 
 /* ---------- Serial / Bluetooth / Simulate event handlers (attach after DOM) ---------- */
@@ -487,132 +637,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 serialPort = await navigator.serial.requestPort();
                 await serialPort.open({ baudRate: 115200 });
 
+                let info = `Puerto serial abierto: ${serialPort.getInfo().usbVendorId || 'N/A'}:${serialPort.getInfo().usbProductId || 'N/A'}`;
+                console.log(info);
+
+                let infotomi = serialPort.getInfo();
+                console.log(infotomi);
+
                 serialReader = serialPort.readable.getReader();
                 startSerialReadLoop();
 
-                // start the serialInterval loop (state machine) if not already
                 if (!serialInterval) {
-                    const currentSession = window.sessionId;
-                    serialInterval = setInterval(() => {
-                        if (currentSession !== window.sessionId) {
-                            clearInterval(serialInterval);
-                            serialInterval = null;
-                            return;
-                        }
-                        contadorUniversal++;
-                        
-                        // state machine logic (simple mirroring the earlier cases)
-                        switch (comando) {
-                            case 0x01:
-                                sendToModule({ idDestino: 0x64, idPag, idOrigen: 0x01, comando, data });
-                                currentState = 'START';
-                                clearFinishSchedule();
-                                break;
-                            case 0x65:
-                                sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x02, data });
-                                currentState = 'WAIT_CONFIRMATION';
-                                break;
-                            case 0x66:
-                                if (data[0] !== 0x71) {
-                                    sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
-                                    currentState = 'WAIT_HANDS';
-                                    abrirPopup();
-                                } else {
-                                    data[0] = 0x71;
-                                    sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x66, data });
-                                    currentState = 'SEND_DATA';
-                                    sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
-                                }
-                                if (data[0] === 0xFF) currentState = 'IDLE';
-                                break;
-                                    
-                            case 0x03:
-                                if (!flagSendData) {
-                                    if (flagCambio || count < 3) {
-                                        data[0] = 0x71;
-                                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x66, data });
-                                        flagCambio = false;
-                                        count++;
-                                    } else {
-                                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
-                                        flagCambio = true;
-                                        count = 0;
-                                    }
-                                    if (data[5] === 0x01) {
-                                        currentState = 'SEND_DATA';
-                                        flagSendData = true;
-                                    }
-                                } else {
-                                    if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
-                                        processSensorData(data);
-                                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
-                                        checkStuckPacket(idPag);
-                                    }
-                                    scheduleFinishOnce();
-                                    
-                                }
-                                break;
-                            case 0x68:
-                                if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
-                                    processSensorData(data);
-                                    sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
-                                    checkStuckPacket(idPag);
-                                }
-                                const timeoutSession = window.sessionId;
-                                setTimeout(() => {
-                                    if (timeoutSession !== window.sessionId) return;
-                                    currentState = 'FINISH';
-                                    sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
-                                    if (!flagCierroPopup) {
-                                        flagCierroPopup = true;
-                                        if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
-                                            window.finishPopupShown = true;
-                                            window.saveCharts();
-                                        }
-                                    }
-                                    comando = 0x01;    
-                                }, 60000);
-                                break;
-                            
-                            case 0x09: 
-                                if (window.Swal) {
-                                    Swal.fire({
-                                        title: "⚠️ bateria baja",
-                                        text: "La maniobra no se puede ejecutarse por falta de bateria, conectar cargador.",
-                                        icon: "warning",
-                                        confirmButtonText: "Aceptar"
-                                    });
-                                } else {
-                                    alert("⚠️ Sin bateria: la maniobra se ha detenido.");
-                                }
-
-                                // Detiene la maniobra
-                                stopSerialLoop();
-                                currentState = 'FINISH';
-                                
-                                break;
-
-                            case 0x0A:
-                            case 0x0B:
-                                if (window.Swal) {
-                                    Swal.fire({
-                                        title: "⚠️ Falla en los sensores",
-                                        text: "La maniobra no se puede ejecutar por falla en los sensores, llame a servicio técnico.",
-                                        icon: "warning",
-                                        confirmButtonText: "Aceptar"
-                                    });
-                                } else {
-                                    alert("⚠️ falla en los sensores.");
-                                }
-
-                                // Detiene la maniobra
-                                stopSerialLoop();
-                                currentState = 'FINISH';
-                               
-
-                                break;
-                            }
-                    }, 250);
+                    serialInterval = runStateMachine(); // 👈 usa función compartida
                 }
 
                 alert('Conexión Serial establecida.');
@@ -630,7 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearFinishSchedule();
             if (currentState !== 'FINISH') {
                 currentState = 'FINISH';
-                sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
+                sendToModule({ idDestino: cambioDeId, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
             }
             if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
                 window.finishPopupShown = true;
@@ -661,7 +696,11 @@ async function closeSerialConnection() {
             await serialPort.close();
             serialPort = null;
         }
-        log(' Serial cerrado');
+        log('🔌 Serial cerrado');
+
+        
+        alert('Se cerró la conexión al Buddy. Para reestablecerla, conectar de vuelta via Bluetooth.');
+
     } catch (err) {
         console.error('❌ Error cerrando serial:', err);
     }
@@ -671,128 +710,12 @@ async function closeSerialConnection() {
 window.restartSerialLoop = function () {
     resetAllStates();
 
-    // Si ya hay puerto serial abierto, relanzar el loop de estados
     if (serialPort && !serialInterval) {
-        const currentSession = window.sessionId;
-        serialInterval = setInterval(() => {
-            if (currentSession !== window.sessionId) {
-                clearInterval(serialInterval);
-                serialInterval = null;
-                return;
-            }
-            contadorUniversal++;
-            
-            switch (comando) {
-                case 0x01:
-                    sendToModule({ idDestino: 0x64, idPag, idOrigen: 0x01, comando, data });
-                    currentState = 'START';
-                    clearFinishSchedule();
-                    break;
-                case 0x65:
-                    sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x02, data });
-                    currentState = 'WAIT_CONFIRMATION';
-                    break;
-                case 0x66:
-                    if (data[0] !== 0x71) {
-                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
-                        currentState = 'WAIT_HANDS';
-                        abrirPopup();
-                    } else {
-                        data[0] = 0x71;
-                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x66, data });
-                        currentState = 'SEND_DATA';
-                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x03, data });
-                    }
-                    if (data[0] === 0xFF) currentState = 'IDLE';
-                    break;
-                case 0x03:
-                    if (!flagSendData) {
-                        if (flagCambio || count < 3) {
-                            data[0] = 0x71;
-                            sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x66, data });
-                            flagCambio = false;
-                            count++;
-                        } else {
-                            sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
-                            flagCambio = true;
-                            count = 0;
-                        }
-                        if (data[5] === 0x01) {
-                            currentState = 'SEND_DATA';
-                            flagSendData = true;
-                        }
-                    } else {
-                        if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
-                            processSensorData(data);
-                            sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
-                            checkStuckPacket(idPag);
-                        }
-                        scheduleFinishOnce();
-                    }
-                    break;
-                case 0x68:
-                    if (currentState !== 'FINISH' && (sendDataFlag === true || data[5] === 0x01)) {
-                        processSensorData(data);
-                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x04, data });
-                        checkStuckPacket(idPag);
-                    }
-                    const timeoutSession = window.sessionId;
-                    setTimeout(() => {
-                        if (timeoutSession !== window.sessionId) return;
-                        currentState = 'FINISH';
-                        sendToModule({ idDestino: 0x64, idPag: contadorUniversal, idOrigen: 0x01, comando: 0x05, data });
-                        if (!flagCierroPopup) {
-                            flagCierroPopup = true;
-                            if (!window.finishPopupShown && typeof window.saveCharts === 'function') {
-                                window.finishPopupShown = true;
-                                window.saveCharts();
-                            }
-                        }
-						comando = 0x01;
-                    }, 60000);
-                    break;
-                case 0x09: 
-                    if (window.Swal) {
-                        Swal.fire({
-                            title: "⚠️ bateria baja",
-                            text: "La maniobra no se puede ejecutarse por falta de bateria",
-                            icon: "warning",
-                            confirmButtonText: "Aceptar"
-                        });
-                    } else {
-                        alert("⚠️ Sin bateria: la maniobra se ha detenido.");
-                    }
-
-                    // Detiene la maniobra
-                    stopSerialLoop();
-                    currentState = 'FINISH';
-                    break;
-
-                case 0x0A:
-                case 0x0B:
-                    if (window.Swal) {
-                        Swal.fire({
-                            title: "⚠️ Falla en los sensores",
-                            text: "La maniobra no se puede ejecutarse por falla en los sensores",
-                            icon: "warning",
-                            confirmButtonText: "Aceptar"
-                        });
-                    } else {
-                        alert("⚠️ falla en los sensores.");
-                    }
-
-                // Detiene la maniobra
-                    stopSerialLoop();
-                    currentState = 'FINISH';
-
-                    break;
-            }
-        }, 250);
+        serialInterval = runStateMachine(); // 👈 usa función compartida
         log('▶️ Loop serial reiniciado en restartSerialLoop()');
     } else {
         log('restartSerialLoop: no hay puerto serial abierto, solo reseteo de estados');
     }
 };
-
 
 window.closeSerialConnection = closeSerialConnection;
