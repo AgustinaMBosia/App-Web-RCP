@@ -58,6 +58,8 @@ let contadormil = 0;
 const DEBUG = true;
 
 let prevState = null; 
+let prevComando = null;
+let sameComandoCounter = 0;
 
 /* ---------- Utility helpers ---------- */
 function log(...args) { if (DEBUG) console.log(...args); }
@@ -321,6 +323,7 @@ async function sendToModule({ idDestino, idPag, idOrigen, comando, data }) {
         }
 
         if (idPag === 0x00) idPag = contadorUniversal++;
+
 
         const frame = [
             idDestino,
@@ -587,6 +590,9 @@ function runStateMachine() {
 
 /* ---------- Serial / Bluetooth / Simulate event handlers (attach after DOM) ---------- */
 document.addEventListener('DOMContentLoaded', () => {
+    // Asegura que todas las variables arranquen en estado limpio al iniciar.
+    resetAllStates();
+
     const bluetoothButton = document.getElementById('bluetoothButton');
     const serialButton = document.getElementById('serialButton');
     const simulateButton = document.getElementById('simulateButton');
