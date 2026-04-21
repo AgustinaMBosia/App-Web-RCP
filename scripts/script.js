@@ -213,7 +213,7 @@ function scheduleFinishOnce() {
         comando = 0x01;
         finishTimeoutId = null;
         finishScheduled = false;
-        stopProgressBar(); // 👈 para la barra cuando termina el minuto
+        stopProgressBar(); //  para la barra cuando termina el minuto
     }, 60000);
 }
 
@@ -721,6 +721,8 @@ async function closeSerialConnection() {
 
         
         alert('Se cerró la conexión al Buddy. Para reestablecerla, conectar de vuelta via Bluetooth.');
+        resetAllStates();
+        resetCharts(); // Resetea las visualizaciones al cerrar serial
 
     } catch (err) {
         console.error('❌ Error cerrando serial:', err);
@@ -740,3 +742,4 @@ window.restartSerialLoop = function () {
 };
 
 window.closeSerialConnection = closeSerialConnection;
+

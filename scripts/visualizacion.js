@@ -387,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 
-	function resetCharts() {
+	window.resetCharts = function() {
 		globalCounter = 0;
 		correctExecutions = 0;
 		incorrectExecutions = 0;
@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (typeof window.restartSerialLoop === 'function') {
 			window.restartSerialLoop();
 		}
-	}
+	};
 
 	function saveCharts() {
 		console.log("saveCharts() ejecutado, sessionId:", window.sessionId);
@@ -504,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			}
 		}).then((result) => {
 			if (result.isConfirmed) {
-				resetCharts();
+				window.resetCharts();
 			} else if (result.isDenied) {
 				if (typeof window.closeSerialConnection === 'function') {
 					window.closeSerialConnection();
@@ -519,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
 	if (playStopButton) playStopButton.addEventListener('click', toggleCharts);
-	if (resetButton) resetButton.addEventListener('click', resetCharts);
+	if (resetButton) resetButton.addEventListener('click', window.resetCharts);
 	if (saveButton) saveButton.addEventListener('click', saveCharts);
 
 	window.saveCharts = saveCharts;
