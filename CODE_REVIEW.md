@@ -1,6 +1,6 @@
 # CODE REVIEW — Simulador RCP
 **Revisión:** 2026-05-11  
-**Revisor:** Senior Software Architect (Claude Code)  
+**Revisor:** Facundo Graffigna 
 **Branch analizado:** `feature/mejoras`  
 **Stack:** Vanilla HTML · CSS · JavaScript (sin framework, sin bundler, sin TypeScript)
 
