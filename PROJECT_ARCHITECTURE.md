@@ -1,6 +1,5 @@
 # PROJECT ARCHITECTURE — Simulador RCP
 **Versión del documento:** 1.0 — 2026-05-11  
-**Mantenedores:** facundograffigna, TomasLucio, AgustinaMBosia  
 **Branch principal:** `main`
 
 ---
