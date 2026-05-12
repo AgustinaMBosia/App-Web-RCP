@@ -2,8 +2,6 @@
 **Revisión:** 2026-05-11  
 **Branch analizado:** `feature/mejoras`  
 **Stack:** Vanilla HTML · CSS · JavaScript ES Modules (sin framework, sin bundler)  
-**Autor del análisis:** Claude Sonnet 4.6
-
 ---
 
 ## Resumen Ejecutivo
