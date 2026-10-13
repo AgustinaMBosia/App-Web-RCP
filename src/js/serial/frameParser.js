@@ -15,6 +15,7 @@ export function startSerialReadLoop() {
         let lost = false;
         try {
             const buffer = [];
+            let lastFrameTs = null;   /* medición: tiempo entre tramas válidas del muñeco */
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) { lost = true; break; }
@@ -37,6 +38,12 @@ export function startSerialReadLoop() {
                                 AppState.idDestino    = packet[0];
                                 AppState.sendDataFlag = packet[14];
                                 log('📥 Trama válida, comando=0x' + AppState.comando.toString(16));
+
+                                const now = performance.now();
+                                if (lastFrameTs !== null) {
+                                    console.log(`🟠 Serial trama — intervalo real: ${(now - lastFrameTs).toFixed(0)} ms (comando 0x${AppState.comando.toString(16)})`);
+                                }
+                                lastFrameTs = now;
                             } else {
                                 log('⚠️ Checksum inválido — recibido:', checksum, 'calculado:', calc);
                             }
