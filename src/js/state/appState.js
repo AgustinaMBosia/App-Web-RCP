@@ -4,6 +4,7 @@ export const AppState = {
 
     /* ----- Sesión ----- */
     sessionId: 0,
+    phase:     'disconnected',   /* disconnected | ready | running | finished — ver ui/controls.js */
 
     /* ----- Máquina de estados ----- */
     currentState:      'IDLE',
@@ -48,16 +49,19 @@ export const AppState = {
     serialInterval:     null,
     serialReader:       null,
     serialPort:         null,
+    serialReadPromise:  null,
+    serialClosing:      false,
     lastBluetoothData:  null,
 
     /* ----- Hooks de comunicación inter-módulo — wired en main.js ----- */
     _hooks: {
-        saveCharts:            null,
-        resetCharts:           null,
-        closeSerialConnection: null,
-        updateVisualization:   null,
-        resetAllStates:        null,
-        restartSerialLoop:     null,
+        saveCharts:          null,
+        startManeuver:       null,
+        cancelManeuver:      null,
+        maneuverFinished:    null,
+        connectionLost:      null,
+        updateVisualization: null,
+        resetAllStates:      null,
     },
 
     nextSession() {
@@ -84,5 +88,8 @@ export const AppState = {
         this.sendDataFlag = false;
         this.flagCambio   = true;
         this.count        = 0;
+        this.samePacketCount = 0;
+        this.lastPacketId    = null;
+        if (this.stuckTimeout) { clearTimeout(this.stuckTimeout); this.stuckTimeout = null; }
     }
 };

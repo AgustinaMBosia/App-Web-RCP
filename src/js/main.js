@@ -1,13 +1,16 @@
 import { AppState } from './state/appState.js';
 import { CMD, BUDDY_ID } from './protocol/constants.js';
 import { stopProgressBar } from './ui/progressBar.js';
-import { log, setConnectionStatus, showAlert } from './ui/logger.js';
+import { log, showAlert } from './ui/logger.js';
+import { openPopup, closePopup } from './ui/popups.js';
+import { setPhase, setIdle, setConnection, setButtonLabel, renderControls } from './ui/controls.js';
 import { startSerialReadLoop } from './serial/frameParser.js';
-import { sendToModule, closeSerialConnection } from './serial/serialManager.js';
+import { sendToModule, releaseSerialPort } from './serial/serialManager.js';
 import { runStateMachine } from './protocol-handlers/stateMachine.js';
 import { updateVisualization } from './visualization/dataHandler.js';
+import { recordedData } from './visualization/csvExport.js';
 import { saveCharts } from './visualization/summaryModal.js';
-import { resetCharts } from './visualizacion.js';
+import { clearManeuverData } from './visualizacion.js';
 
 /* ---------- Ciclo de vida de la sesión ---------- */
 
@@ -16,32 +19,91 @@ function clearFinishSchedule() {
         clearTimeout(AppState.finishTimeoutId);
         AppState.finishTimeoutId = null;
     }
+    if (AppState.stuckTimeout) {
+        clearTimeout(AppState.stuckTimeout);
+        AppState.stuckTimeout = null;
+    }
     AppState.finishScheduled = false;
     stopProgressBar();
+}
+
+function stopSimulation() {
+    if (AppState.simulationInterval) { clearInterval(AppState.simulationInterval); AppState.simulationInterval = null; }
+    setButtonLabel(document.getElementById('simulateButton'), 'Simular Trama');
 }
 
 function resetAllStates() {
     log('🔄 resetAllStates — invalidando session');
 
-    if (AppState.simulationInterval) { clearInterval(AppState.simulationInterval); AppState.simulationInterval = null; }
+    stopSimulation();
     if (AppState.bluetoothInterval)  { clearInterval(AppState.bluetoothInterval);  AppState.bluetoothInterval  = null; }
     if (AppState.serialInterval)     { clearInterval(AppState.serialInterval);     AppState.serialInterval     = null; }
     clearFinishSchedule();
 
     AppState.resetSession();
 
-    const simBtn = document.getElementById('simulateButton');
-    if (simBtn) simBtn.textContent = 'Simular Trama';
-
     log('✅ resetAllStates completo (sessionId=', AppState.sessionId, ')');
 }
 
-function restartSerialLoop() {
+/* "Iniciar maniobra" / "Nueva maniobra": parte siempre de cero. */
+function startManeuver() {
     resetAllStates();
-    if (AppState.serialPort && !AppState.serialInterval) {
-        AppState.serialInterval = runStateMachine();
-        log('▶️ Loop serial reiniciado');
+    clearManeuverData();
+
+    if (!AppState.serialPort) {   /* sin dispositivo: se usa "Simular Trama" */
+        setIdle();
+        return;
     }
+    setPhase('running');
+    AppState.serialInterval = runStateMachine();
+    log('▶️ Maniobra iniciada');
+}
+
+/* Salida limpia de una maniobra en curso sin resumen (cartel "calculando", popup de manos, falla de hardware) */
+function cancelManeuver({ notifyDevice = true } = {}) {
+    if (notifyDevice && AppState.serialPort && AppState.serialInterval) {
+        sendToModule({ idDestino: BUDDY_ID, idPag: AppState.contadorUniversal, idOrigen: 0x01, comando: CMD.FINISH, data: AppState.data });
+    }
+    resetAllStates();
+    clearManeuverData();
+    setIdle();
+    log('⏹ Maniobra cancelada');
+}
+
+/* La maniobra terminó y se mostró el resumen: se frena lo que ya no hace falta */
+function onManeuverFinished() {
+    stopSimulation();
+    clearFinishSchedule();
+}
+
+/* Cierre de la conexión serial, pedido por el usuario o por pérdida del dispositivo */
+async function onSerialClosed(reason) {
+    if (!AppState.serialPort) return;   /* ya se está cerrando */
+
+    const hadData = AppState.phase === 'running' && recordedData.length > 0;
+    await releaseSerialPort();
+    resetAllStates();
+    setConnection('disconnected');
+
+    if (hadData) {
+        /* No se pierden los datos: se muestra el resumen de lo registrado */
+        saveCharts({ notice: reason === 'lost'
+            ? 'Se perdió la conexión con el dispositivo. Este es el resumen de lo registrado hasta ese momento.'
+            : 'Se desconectó el dispositivo. Este es el resumen de lo registrado hasta ese momento.' });
+        return;
+    }
+
+    if (AppState.phase !== 'finished') {
+        clearManeuverData();
+        setIdle();
+    } else {
+        renderControls();
+    }
+
+    showAlert(reason === 'lost'
+        ? { title: 'Dispositivo desconectado', text: 'Se perdió la conexión. Encendé el dispositivo y presioná "Conectar dispositivo".', icon: 'warning', confirmButtonText: 'Aceptar' }
+        : { title: 'Dispositivo desconectado', icon: 'info', timer: 2000, showConfirmButton: false },
+        reason === 'lost' ? 'alert' : 'info');
 }
 
 /* ---------- Procesamiento de tramas de texto (Bluetooth / Simulación) ---------- */
@@ -53,7 +115,7 @@ function processData(text) {
     if (match) {
         const [, handPos, profStr, freqStr] = match;
         AppState.handsOk = (handPos === 'OK');
-        if (AppState.handsOk && AppState.handsPopupOpen && window.Swal) Swal.close();
+        if (AppState.handsOk && AppState.handsPopupOpen) closePopup('hands');
         updateVisualization({
             handPosition: handPos,
             profundidad:  parseInt(profStr, 10),
@@ -77,34 +139,45 @@ function generateSimulatedData() {
 
 document.addEventListener('DOMContentLoaded', () => {
     /* Cablear hooks de comunicación inter-módulo */
-    AppState._hooks.saveCharts            = saveCharts;
-    AppState._hooks.resetCharts           = resetCharts;
-    AppState._hooks.closeSerialConnection = closeSerialConnection;
-    AppState._hooks.updateVisualization   = updateVisualization;
-    AppState._hooks.resetAllStates        = resetAllStates;
-    AppState._hooks.restartSerialLoop     = restartSerialLoop;
+    AppState._hooks.saveCharts          = saveCharts;
+    AppState._hooks.startManeuver       = startManeuver;
+    AppState._hooks.cancelManeuver      = cancelManeuver;
+    AppState._hooks.maneuverFinished    = onManeuverFinished;
+    AppState._hooks.connectionLost      = () => onSerialClosed('lost');
+    AppState._hooks.updateVisualization = updateVisualization;
+    AppState._hooks.resetAllStates      = resetAllStates;
 
     resetAllStates();
+    setConnection('disconnected');
 
     const bluetoothButton    = document.getElementById('bluetoothButton');
     const serialButton       = document.getElementById('serialButton');
     const simulateButton     = document.getElementById('simulateButton');
-    const resetButton        = document.getElementById('resetButton');
+    const startButton        = document.getElementById('startButton');
     const manualFinishButton = document.getElementById('saveButton');
+    const cancelWaitingBtn   = document.getElementById('cancelWaitingButton');
 
-    if (resetButton) resetButton.addEventListener('click', resetCharts);
+    if (startButton)      startButton.addEventListener('click', startManeuver);
+    if (cancelWaitingBtn) cancelWaitingBtn.addEventListener('click', () => cancelManeuver());
 
     if (manualFinishButton) {
         manualFinishButton.addEventListener('click', () => {
+            if (AppState.phase === 'finished') { saveCharts(); return; }   /* "Ver resumen" */
+            if (AppState.phase !== 'running') return;
+
             clearFinishSchedule();
-            if (AppState.currentState !== 'FINISH') {
+            if (AppState.serialPort && AppState.currentState !== 'FINISH') {
                 AppState.currentState = 'FINISH';
                 sendToModule({ idDestino: BUDDY_ID, idPag: AppState.contadorUniversal, idOrigen: 0x01, comando: CMD.FINISH, data: AppState.data });
             }
-            if (!AppState.finishPopupShown) {
-                AppState.finishPopupShown = true;
-                saveCharts();
-            }
+            saveCharts();
+        });
+    }
+
+    // Dispositivo desenchufado / apagado
+    if (navigator.serial) {
+        navigator.serial.addEventListener('disconnect', (ev) => {
+            if (ev.target === AppState.serialPort) onSerialClosed('lost');
         });
     }
 
@@ -120,7 +193,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const service        = await server.getPrimaryService('device_information');
                 const characteristic = await service.getCharacteristic('manufacturer_name_string');
 
+                let lastNotifyTs = null;
                 characteristic.addEventListener('characteristicvaluechanged', (ev) => {
+                    const now = performance.now();
+                    if (lastNotifyTs !== null) {
+                        console.log(`🔵 BT notificación — intervalo real: ${(now - lastNotifyTs).toFixed(0)} ms`);
+                    }
+                    lastNotifyTs = now;
                     AppState.lastBluetoothData = new TextDecoder().decode(ev.target.value);
                 });
                 await characteristic.startNotifications();
@@ -148,46 +227,71 @@ document.addEventListener('DOMContentLoaded', () => {
             if (AppState.simulationInterval) {
                 clearInterval(AppState.simulationInterval);
                 AppState.simulationInterval = null;
-                simulateButton.textContent = 'Simular Trama';
-                showAlert({ title: 'Simulación detenida', icon: 'info', timer: 1500, showConfirmButton: false });
-            } else {
-                AppState.simulationInterval = setInterval(() => {
-                    processData(generateSimulatedData());
-                }, 500);
-                simulateButton.textContent = '⏸ Pausar simulación';
-                showAlert({ title: 'Simulación iniciada', icon: 'success', timer: 1500, showConfirmButton: false });
+                setButtonLabel(simulateButton, 'Simular Trama');
+                showAlert({ title: 'Simulación pausada', icon: 'info', timer: 1500, showConfirmButton: false });
+                return;
             }
+
+            if (AppState.phase !== 'running') {   /* simular arranca una maniobra nueva */
+                resetAllStates();
+                clearManeuverData();
+                setPhase('running');
+            }
+            AppState.simulationInterval = setInterval(() => {
+                processData(generateSimulatedData());
+            }, 500);
+            setButtonLabel(simulateButton, '⏸ Pausar simulación');
+            showAlert({ title: 'Simulación iniciada', icon: 'success', timer: 1500, showConfirmButton: false });
         });
     }
 
     // ----- Serial -----
     if (serialButton) {
         serialButton.addEventListener('click', async () => {
-            serialButton.disabled    = true;
-            serialButton.textContent = 'Conectando…';
-            setConnectionStatus('connecting');
+            /* Conectado → este botón desconecta */
+            if (AppState.serialPort) {
+                if (AppState.phase === 'running' && recordedData.length > 0) {
+                    const r = await openPopup('alert', {
+                        title: '¿Desconectar el dispositivo?',
+                        text:  'La maniobra en curso se cerrará y vas a ver su resumen.',
+                        icon:  'question',
+                        showCancelButton:  true,
+                        confirmButtonText: 'Desconectar',
+                        cancelButtonText:  'Volver'
+                    });
+                    if (!r.isConfirmed) return;
+                }
+                await onSerialClosed('user');
+                return;
+            }
+
+            setConnection('connecting');
+            let port = null;
             try {
-                AppState.serialPort = await navigator.serial.requestPort();
-                await AppState.serialPort.open({ baudRate: 115200 });
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
 
-                log('Puerto serial abierto:', AppState.serialPort.getInfo());
-
-                AppState.serialReader = AppState.serialPort.readable.getReader();
+                AppState.serialPort   = port;
+                AppState.serialReader = port.readable.getReader();
                 startSerialReadLoop();
 
-                if (!AppState.serialInterval) AppState.serialInterval = runStateMachine();
+                log('Puerto serial abierto:', port.getInfo());
 
-                serialButton.textContent = 'Conectado ✓';
-                setConnectionStatus('connected');
+                setConnection('connected');
+                if (AppState.phase !== 'finished') {   /* si quedó un resumen sin guardar, se conserva */
+                    setIdle();
+                    resetAllStates();
+                    AppState.serialInterval = runStateMachine();   /* escucha al dispositivo, como antes */
+                }
                 showAlert({ title: '✅ Conexión establecida', icon: 'success', timer: 2000, showConfirmButton: false });
                 log('🔌 Serial OK');
             } catch (err) {
                 console.error('❌ Error conexión Serial:', err);
-                serialButton.disabled    = false;
-                serialButton.textContent = 'Conectar dispositivo';
-                setConnectionStatus('disconnected');
+                await releaseSerialPort();
+                try { await port?.close(); } catch (e) { /* ya cerrado */ }
+                setConnection('disconnected');
                 if (err.name !== 'NotFoundError') {
-                    showAlert({ title: 'Error de conexión', text: 'No se pudo conectar al dispositivo.', icon: 'error', confirmButtonText: 'Aceptar' });
+                    showAlert({ title: 'Error de conexión', text: 'No se pudo conectar al dispositivo. Verificá que esté encendido y que ninguna otra pestaña lo esté usando.', icon: 'error', confirmButtonText: 'Aceptar' }, 'alert');
                 }
             }
         });

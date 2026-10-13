@@ -3,15 +3,21 @@ import { CMD } from '../protocol/constants.js';
 import { calculateChecksum } from '../protocol/checksum.js';
 import { log } from '../ui/logger.js';
 
+/* Lee del reader actual (AppState.serialReader). Trabaja siempre con su propio `reader` y `port`
+   locales: un loop viejo nunca toca el reader de una conexión nueva. Si la lectura termina sin que
+   la app haya pedido cerrar (dispositivo apagado / desenchufado), avisa con el hook connectionLost. */
 export function startSerialReadLoop() {
-    if (!AppState.serialReader) return;
+    const reader = AppState.serialReader;
+    const port   = AppState.serialPort;
+    if (!reader) return;
 
-    (async () => {
+    AppState.serialReadPromise = (async () => {
+        let lost = false;
         try {
             const buffer = [];
-            while (AppState.serialPort && AppState.serialReader) {
-                const { value, done } = await AppState.serialReader.read();
-                if (done) break;
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) { lost = true; break; }
                 if (!value) continue;
 
                 for (let i = 0; i < value.length; i++) {
@@ -44,14 +50,15 @@ export function startSerialReadLoop() {
                 }
             }
         } catch (err) {
+            lost = true;
             console.error('❌ Error en read loop:', err);
         } finally {
-            try {
-                if (AppState.serialReader) {
-                    await AppState.serialReader.releaseLock();
-                    AppState.serialReader = null;
-                }
-            } catch (e) { /* ignorado */ }
+            try { reader.releaseLock(); } catch (e) { /* ignorado */ }
+        }
+
+        /* Sólo cuenta como pérdida si seguimos en la misma conexión y no la cerramos nosotros */
+        if (lost && !AppState.serialClosing && AppState.serialPort === port) {
+            AppState._hooks.connectionLost?.();
         }
     })();
 }

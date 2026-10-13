@@ -374,6 +374,13 @@ body {
     color: var(--text);
 }
 
+.btn--overlay {
+    background: rgba(255,255,255,.12);
+    color: #e2e8f0;
+    border: 1px solid rgba(255,255,255,.35);
+}
+.btn--overlay:hover:not(:disabled) { background: rgba(255,255,255,.22); }
+
 .btn-icon {
     width: 15px;
     height: 15px;
@@ -573,7 +580,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 24px;
-    z-index: 9000;
+    z-index: 1000;   /* por debajo de los popups de SweetAlert2 (1060) */
 }
 
 .waiting-overlay.is-visible { display: flex; }

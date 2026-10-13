@@ -3,10 +3,14 @@ import { CMD, BUDDY_ID } from '../protocol/constants.js';
 import { sendToModule, stopSerialLoop } from '../serial/serialManager.js';
 import { startProgressBar, stopProgressBar } from '../ui/progressBar.js';
 import { log, showAlert } from '../ui/logger.js';
+import { openPopup, closePopup } from '../ui/popups.js';
+
+/* Con el dispositivo escuchando (ready) o con maniobra en curso (running) */
+const isActivePhase = () => AppState.phase === 'ready' || AppState.phase === 'running';
 
 /* ---------- Scheduling de fin de maniobra ---------- */
 export function scheduleFinishOnce() {
-    if (AppState.finishScheduled || AppState.finishPopupShown) return;
+    if (AppState.finishScheduled || AppState.finishPopupShown || !isActivePhase()) return;
     AppState.finishScheduled = true;
     startProgressBar();
 
@@ -21,18 +25,15 @@ export function scheduleFinishOnce() {
 
         if (AppState.currentState !== 'FINISH') {
             AppState.currentState = 'FINISH';
-            sendToModule({ idDestino: CMD.HANDS_STATUS, idPag: AppState.contadorUniversal, idOrigen: 0x01, comando: CMD.FINISH, data: AppState.data });
-        }
-
-        if (!AppState.finishPopupShown) {
-            AppState.finishPopupShown = true;
-            AppState._hooks.saveCharts?.();
+            sendToModule({ idDestino: BUDDY_ID, idPag: AppState.contadorUniversal, idOrigen: 0x01, comando: CMD.FINISH, data: AppState.data });
         }
 
         AppState.comando         = CMD.PING;
         AppState.finishTimeoutId = null;
         AppState.finishScheduled = false;
         stopProgressBar();
+
+        if (!AppState.finishPopupShown) AppState._hooks.saveCharts?.();
     }, 60000);
 }
 
@@ -46,30 +47,30 @@ export function processSensorData(sensorBytes) {
 
     AppState.handsOk = (manoOK === 'OK');
 
-    if (AppState.handsOk && AppState.handsPopupOpen && window.Swal) Swal.close();
+    if (AppState.handsOk && AppState.handsPopupOpen) closePopup('hands');
 
     AppState._hooks.updateVisualization?.({ handPosition: manoOK, profundidad: profundidadV, freq: frecuenciaV });
 }
 
 /* ---------- Popup de posición de manos ---------- */
 export function abrirPopup() {
-    if (AppState.handsPopupOpen || AppState.handsPopupShownThisSession) return;
-    if (!window.Swal) { console.warn('SweetAlert2 no encontrado'); return; }
+    if (AppState.handsPopupOpen || AppState.handsPopupShownThisSession || !isActivePhase()) return;
 
     AppState.handsPopupOpen             = true;
     AppState.handsPopupShownThisSession = true;
 
-    Swal.fire({
+    const thisSession = AppState.sessionId;
+    openPopup('hands', {
         title:             'Poner bien las manos',
         text:              'El pop-up se cerrará cuando pongas bien las manos',
         icon:              'info',
         showConfirmButton: true,
         allowOutsideClick: false,
         allowEscapeKey:    false,
-        confirmButtonText: 'Terminar Maniobra',
+        confirmButtonText: 'Cancelar maniobra',
         didClose: () => { AppState.handsPopupOpen = false; }
     }).then((result) => {
-        if (result.isConfirmed) AppState._hooks.saveCharts?.();
+        if (result.isConfirmed && thisSession === AppState.sessionId) AppState._hooks.cancelManeuver?.();
     });
 }
 
@@ -87,19 +88,13 @@ export function checkStuckPacket(currentId) {
         AppState.lastPacketId    = null;
 
         if (AppState.stuckTimeout) clearTimeout(AppState.stuckTimeout);
+        const thisSession = AppState.sessionId;
         AppState.stuckTimeout = setTimeout(() => {
-            showAlert({
-                title: '⚠️ Sin recepción de datos',
-                text:  'La maniobra se detuvo por falta de actualización de paquetes.',
-                icon:  'warning',
-                confirmButtonText: 'Aceptar'
-            });
+            AppState.stuckTimeout = null;
+            if (thisSession !== AppState.sessionId || AppState.phase !== 'running') return;
             stopSerialLoop();
             AppState.currentState = 'FINISH';
-            if (!AppState.finishPopupShown) {
-                AppState.finishPopupShown = true;
-                AppState._hooks.saveCharts?.();
-            }
+            AppState._hooks.saveCharts?.({ notice: 'La maniobra se detuvo por falta de actualización de datos del dispositivo.' });
         }, 500);
     }
 }
@@ -184,50 +179,26 @@ export function handleSensorData() {
     }
 
     scheduleFinishOnce();
-    scheduleChannelFinish();
-}
-
-export function scheduleChannelFinish() {
-    const capturedSession  = AppState.sessionId;
-    const capturedPagIndex = AppState.contadorUniversal;
-
-    setTimeout(() => {
-        if (capturedSession !== AppState.sessionId) return;
-
-        AppState.currentState = 'FINISH';
-        sendToModule({ idDestino: BUDDY_ID, idPag: capturedPagIndex, idOrigen: 0x01, comando: CMD.FINISH, data: AppState.data });
-        stopProgressBar();
-
-        if (!AppState.flagCierroPopup) {
-            AppState.flagCierroPopup = true;
-            if (!AppState.finishPopupShown) {
-                AppState.finishPopupShown = true;
-                AppState._hooks.saveCharts?.();
-            }
-        }
-
-        AppState.comando = CMD.PING;
-    }, 60000);
 }
 
 export function handleLowBattery() {
+    stopSerialLoop();
+    AppState._hooks.cancelManeuver?.({ notifyDevice: false });
     showAlert({
         title: '⚠️ Batería baja',
         text:  'La maniobra no puede ejecutarse por falta de batería. Conectar el cargador.',
         icon:  'warning',
         confirmButtonText: 'Aceptar'
-    });
-    stopSerialLoop();
-    AppState.currentState = 'FINISH';
+    }, 'alert');
 }
 
 export function handleSensorFailure() {
+    stopSerialLoop();
+    AppState._hooks.cancelManeuver?.({ notifyDevice: false });
     showAlert({
         title: '⚠️ Falla en los sensores',
         text:  'La maniobra no puede ejecutarse por falla en los sensores. Llamar a servicio técnico.',
         icon:  'warning',
         confirmButtonText: 'Aceptar'
-    });
-    stopSerialLoop();
-    AppState.currentState = 'FINISH';
+    }, 'alert');
 }

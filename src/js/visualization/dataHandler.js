@@ -4,6 +4,12 @@ import { freqData, profData, pieData, handPosData, profColors, handPosChart,
 import { updateBadge, updateHandPosBadge, updatePieBadge } from './badges.js';
 import { showWaitingCircle, hideWaitingCircle } from './overlay.js';
 import { recordedData } from './csvExport.js';
+import { openPopup, closePopup } from '../ui/popups.js';
+import { setPhase } from '../ui/controls.js';
+
+/* El cartel "Calculando frecuencia" se muestra al menos este tiempo, para que siempre sea visible
+   (y para descartar tramas viejas que el dispositivo pueda enviar justo al arrancar). */
+const MIN_WAITING_MS = 1000;
 
 export const fullFreqData        = [];
 export const fullProfData        = [];
@@ -19,6 +25,7 @@ let pastFreq            = 0;
 let pastProf            = 0;
 let contadorCeros       = 0;
 let zeroAlertShown      = false;
+let trackingStartedAt   = 0;
 
 export function resetVisualizationState() {
     globalCounter       = 0;
@@ -28,12 +35,17 @@ export function resetVisualizationState() {
     hasNonZeroFreq      = false;
     pastFreq = pastProf = contadorCeros = 0;
     zeroAlertShown      = false;
+    trackingStartedAt   = 0;
     handPositionHistory.length = 0;
     fullFreqData.length = fullProfData.length = fullLabels.length = 0;
 }
 
 function handleDataForVisualization(parsedData) {
     if (AppState.isPaused) return;
+
+    /* Conectado y escuchando: la primera trama del dispositivo da comienzo a la maniobra */
+    if (AppState.phase === 'ready' && AppState.serialInterval) setPhase('running');
+    if (AppState.phase !== 'running') return;
 
     let freq       = parsedData.freq        || 0;
     let prof       = parsedData.profundidad  || 0;
@@ -42,9 +54,11 @@ function handleDataForVisualization(parsedData) {
 
     if (isHandOK) startTracking = true;
     if (!startTracking) return;
+    if (!trackingStartedAt) trackingStartedAt = performance.now();
 
     /* Esperar primera frecuencia válida */
-    if (!hasNonZeroFreq && freq === 0) {
+    const waitedEnough = performance.now() - trackingStartedAt >= MIN_WAITING_MS;
+    if (!hasNonZeroFreq && (freq === 0 || !waitedEnough)) {
         showWaitingCircle();
         handPositionHistory.push(handPos);
         updateHandPosBadge(document.getElementById('handPosBadge'), handPos);
@@ -55,14 +69,14 @@ function handleDataForVisualization(parsedData) {
 
     if (freq > 0) {
         hideWaitingCircle();
-        if (freq !== pastFreq && zeroAlertShown && window.Swal) { Swal.close(); zeroAlertShown = false; contadorCeros = 0; }
+        if (freq !== pastFreq && zeroAlertShown) { closePopup('stopped'); zeroAlertShown = false; contadorCeros = 0; }
         hasNonZeroFreq = true;
     } else if (hasNonZeroFreq) {
         freq = pastFreq;
         prof = pastProf;
         contadorCeros++;
         if (!zeroAlertShown && contadorCeros === 3) {
-            Swal.fire({ title: 'Maniobra detenida', text: 'Retome la maniobra para continuar.', icon: 'warning', confirmButtonText: 'Aceptar' });
+            openPopup('stopped', { title: 'Maniobra detenida', text: 'Retome la maniobra para continuar.', icon: 'warning', confirmButtonText: 'Aceptar' });
             zeroAlertShown = true;
             return;
         }

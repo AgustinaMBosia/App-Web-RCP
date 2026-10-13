@@ -49,22 +49,22 @@
             <div class="btn-group">
                 <button id="serialButton" class="btn btn--primary">
                     <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9V9h2v4zm0-6H9V5h2v2z"/></svg>
-                    Conectar dispositivo
+                    <span class="btn-label">Conectar dispositivo</span>
                 </button>
                 <button id="simulateButton" class="btn btn--secondary">
                     <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
-                    Simular Trama
+                    <span class="btn-label">Simular Trama</span>
                 </button>
             </div>
             <div class="btn-separator"></div>
             <div class="btn-group">
-                <button id="saveButton" class="btn btn--warning">
-                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"/></svg>
-                    Terminar maniobra
+                <button id="startButton" class="btn btn--primary" disabled>
+                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
+                    <span class="btn-label">Iniciar maniobra</span>
                 </button>
-                <button id="resetButton" class="btn btn--ghost">
-                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
-                    Reiniciar
+                <button id="saveButton" class="btn btn--warning" disabled>
+                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"/></svg>
+                    <span class="btn-label">Terminar maniobra</span>
                 </button>
             </div>
         </div>
@@ -143,6 +143,7 @@
     <div id="waitingCircle" class="waiting-overlay">
         <div class="waiting-pulse"></div>
         <p class="waiting-text">Calculando frecuencia<br>y profundidad…</p>
+        <button id="cancelWaitingButton" class="btn btn--overlay" type="button">Cancelar maniobra</button>
     </div>
 
     <!-- Fase 6: ES Modules — único entry point -->
