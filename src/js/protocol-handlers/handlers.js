@@ -1,5 +1,5 @@
 import { AppState } from '../state/appState.js';
-import { CMD, BUDDY_ID } from '../protocol/constants.js';
+import { CMD, BUDDY_ID, DATA_IDX, TRAMA_CON_DESCOMPRESION } from '../protocol/constants.js';
 import { sendToModule, stopSerialLoop } from '../serial/serialManager.js';
 import { startProgressBar, stopProgressBar } from '../ui/progressBar.js';
 import { log, showAlert } from '../ui/logger.js';
@@ -41,15 +41,18 @@ export function scheduleFinishOnce() {
 export function processSensorData(sensorBytes) {
     if (!sensorBytes || !sensorBytes.length) return;
 
-    const manoOK       = sensorBytes[0] === 1 ? 'OK' : 'NOK';
-    const profundidadV = sensorBytes[1] | (sensorBytes[2] << 8);
-    const frecuenciaV  = sensorBytes[3] | (sensorBytes[4] << 8);
+    const b = sensorBytes, I = DATA_IDX;
+    const manoOK       = b[I.MANOS] === 1 ? 'OK' : 'NOK';
+    const profundidadV = b[I.PROF_LO] | (b[I.PROF_HI] << 8);
+    const frecuenciaV  = b[I.FREC_LO] | (b[I.FREC_HI] << 8);
+    /* Trama vieja: no hay dato de descompresión → undefined (la UI muestra "sin dato") */
+    const descompresionV = TRAMA_CON_DESCOMPRESION ? (b[I.DESC_LO] | (b[I.DESC_HI] << 8)) : undefined;
 
     AppState.handsOk = (manoOK === 'OK');
 
     if (AppState.handsOk && AppState.handsPopupOpen) closePopup('hands');
 
-    AppState._hooks.updateVisualization?.({ handPosition: manoOK, profundidad: profundidadV, freq: frecuenciaV });
+    AppState._hooks.updateVisualization?.({ handPosition: manoOK, profundidad: profundidadV, freq: frecuenciaV, descompresion: descompresionV });
 }
 
 /* ---------- Popup de posición de manos ---------- */
@@ -150,7 +153,7 @@ function handleAckHandsHandshake() {
         AppState.count = 0;
     }
 
-    if (AppState.data[5] === 0x01) {
+    if (AppState.data[DATA_IDX.FLAG_RUN] === 0x01) {
         AppState.currentState = 'SEND_DATA';
         AppState.flagSendData = true;
         scheduleFinishOnce();
@@ -158,7 +161,7 @@ function handleAckHandsHandshake() {
 }
 
 function handleAckHandsDataActive() {
-    const dataIsActive = AppState.sendDataFlag === true || AppState.data[5] === 0x01;
+    const dataIsActive = AppState.sendDataFlag === true || AppState.data[DATA_IDX.FLAG_RUN] === 0x01;
 
     if (AppState.currentState !== 'FINISH' && dataIsActive) {
         processSensorData(AppState.data);
@@ -170,7 +173,7 @@ function handleAckHandsDataActive() {
 }
 
 export function handleSensorData() {
-    const dataIsActive = AppState.sendDataFlag === true || AppState.data[5] === 0x01;
+    const dataIsActive = AppState.sendDataFlag === true || AppState.data[DATA_IDX.FLAG_RUN] === 0x01;
 
     if (AppState.currentState !== 'FINISH' && dataIsActive) {
         processSensorData(AppState.data);

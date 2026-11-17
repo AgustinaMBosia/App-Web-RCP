@@ -27,7 +27,7 @@ export async function downloadCSV() {
     if (recordedData.length === 0) return { status: 'warning', message: 'No hay datos para guardar.' };
 
     const header   = 'Timestamp,Frecuencia,Profundidad,Descompresion,PosicionMano\n';
-    const rows     = recordedData.map(r => `${r.timestamp},${r.frecuencia},${r.profundidad},${r.descompresion},${r.posicionMano}`);
+    const rows     = recordedData.map(r => `${r.timestamp},${r.frecuencia},${r.profundidad},${r.descompresion ?? ''},${r.posicionMano}`);
     const blob     = new Blob([header + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const fileName = `maniobra_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
 

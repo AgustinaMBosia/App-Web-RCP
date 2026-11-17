@@ -51,7 +51,8 @@ function handleDataForVisualization(parsedData) {
 
     let freq       = parsedData.freq        || 0;
     let prof       = parsedData.profundidad  || 0;
-    let desc       = parsedData.descompresion || 0;   /* mm residuales; 0 = descompresión completa */
+    /* mm residuales (0 = descompresión completa). null si el dispositivo no la manda (trama vieja) */
+    let desc       = Number.isFinite(parsedData.descompresion) ? parsedData.descompresion : null;
     const handPos  = parsedData.handPosition || 'N/A';
     const isHandOK = handPos === 'OK';
 

@@ -18,3 +18,20 @@ export const CMD = {
 
 export const BUDDY_ID          = 0x64;
 export const PROGRESS_DURATION = 60; // segundos
+
+/* ---------- Formato de los 8 bytes de datos (data[0..7]) de la trama del muñeco ----------
+   Trama vieja:  [manos, prof L, prof H, frec L, frec H, FLAG RUN, -,      -       ]
+   Trama nueva:  [manos, prof L, prof H, frec L, frec H, DESC L,   DESC H, FLAG RUN]
+   Poner en true cuando el muñeco tenga el firmware nuevo (con descompresión). */
+export const TRAMA_CON_DESCOMPRESION = false;
+
+export const DATA_IDX = {
+    MANOS:     0,
+    PROF_LO:   1, PROF_HI: 2,
+    FREC_LO:   3, FREC_HI: 4,
+    DESC_LO:   5, DESC_HI: 6,                         /* sólo existen en la trama nueva */
+    FLAG_RUN:  TRAMA_CON_DESCOMPRESION ? 7 : 5,
+};
+
+/* Posición de data[0] dentro de la trama completa de 18 bytes (ver frameParser.js) */
+export const DATA_OFFSET = 9;

@@ -1,5 +1,5 @@
 import { AppState } from '../state/appState.js';
-import { CMD } from '../protocol/constants.js';
+import { CMD, DATA_IDX, DATA_OFFSET } from '../protocol/constants.js';
 import { calculateChecksum } from '../protocol/checksum.js';
 import { log } from '../ui/logger.js';
 
@@ -36,7 +36,7 @@ export function startSerialReadLoop() {
                                 AppState.idPag        = packet[2];
                                 AppState.idOrigen     = packet[6];
                                 AppState.idDestino    = packet[0];
-                                AppState.sendDataFlag = packet[14];
+                                AppState.sendDataFlag = packet[DATA_OFFSET + DATA_IDX.FLAG_RUN];
                                 log('📥 Trama válida, comando=0x' + AppState.comando.toString(16));
 
                                 const now = performance.now();

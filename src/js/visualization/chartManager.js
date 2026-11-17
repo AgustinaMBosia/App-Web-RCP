@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     callbacks: {
                         label: (ctx) => {
                             const desc = profDesc[ctx.dataIndex];
+                            if (desc === null) return `Profundidad: ${ctx.raw} mm`;   /* trama sin descompresión */
                             return [`Profundidad: ${ctx.raw} mm`,
                                     `Descompresión: ${desc} mm (${desc <= DESC_MAX ? 'completa' : 'incompleta'})`];
                         }

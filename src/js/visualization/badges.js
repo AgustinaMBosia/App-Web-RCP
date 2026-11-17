@@ -62,9 +62,10 @@ export function resetBadges() {
 const GAUGE_MAX_MM = 70;   /* fondo de la escala vertical */
 
 export function updateCprGauge(prof, desc, descMax, barColor) {
+    const hasDesc = desc !== null && desc !== undefined;
     const bar = document.getElementById('cprGaugeBar');
     if (bar) {
-        const top = Math.min(Math.max(desc, 0), GAUGE_MAX_MM);
+        const top = hasDesc ? Math.min(Math.max(desc, 0), GAUGE_MAX_MM) : 0;
         const end = Math.min(Math.max(prof, top), GAUGE_MAX_MM);
         bar.style.setProperty('--top', (top / GAUGE_MAX_MM) * 100 + '%');
         bar.style.setProperty('--h',   ((end - top) / GAUGE_MAX_MM) * 100 + '%');
@@ -72,7 +73,10 @@ export function updateCprGauge(prof, desc, descMax, barColor) {
     }
 
     const status = document.getElementById('releaseStatus');
-    if (status) {
+    if (status && !hasDesc) {
+        status.dataset.state = 'idle';
+        status.textContent = 'Liberación del pecho: sin dato del dispositivo';
+    } else if (status) {
         const ok = desc <= descMax;
         status.dataset.state = ok ? 'ok' : 'bad';
         status.textContent = ok
