@@ -110,16 +110,18 @@ async function onSerialClosed(reason) {
 
 function processData(text) {
     if (!text || typeof text !== 'string') return;
-    const match = text.match(/U(OK|NOK),P(\d+),F(\d+):/);
+    /* D (descompresión, mm) es opcional: las tramas viejas sin D siguen funcionando */
+    const match = text.match(/U(OK|NOK),P(\d+),F(\d+)(?:,D(\d+))?:/);
 
     if (match) {
-        const [, handPos, profStr, freqStr] = match;
+        const [, handPos, profStr, freqStr, descStr] = match;
         AppState.handsOk = (handPos === 'OK');
         if (AppState.handsOk && AppState.handsPopupOpen) closePopup('hands');
         updateVisualization({
             handPosition: handPos,
             profundidad:  parseInt(profStr, 10),
-            freq:         parseInt(freqStr, 10)
+            freq:         parseInt(freqStr, 10),
+            descompresion: descStr ? parseInt(descStr, 10) : 0
         });
     } else {
         log('⚠️ Trama de texto no reconocida:', text);
@@ -132,7 +134,9 @@ function generateSimulatedData() {
     const handPosition = Math.random() > 0.3 ? 'OK' : 'NOK';
     const profundidad  = Math.floor(Math.random() * 40) + 30;   // 30–70 mm
     const freq         = Math.floor(Math.random() * 70) + 80;   // 80–150 cpm
-    return `U${handPosition},P${profundidad},F${freq}:`;
+    /* Descompresión: 70% completa (0–3 mm), 30% incompleta (6–15 mm) */
+    const descompresion = Math.random() > 0.3 ? Math.floor(Math.random() * 4) : Math.floor(Math.random() * 10) + 6;
+    return `U${handPosition},P${profundidad},F${freq},D${descompresion}:`;
 }
 
 /* ---------- Bootstrap ---------- */

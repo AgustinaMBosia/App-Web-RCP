@@ -42,6 +42,7 @@ export function updatePieBadge(badge, correct, incorrect) {
 }
 
 export function resetBadges() {
+    resetCprGauge();
     ['freqBadge', 'profBadge', 'handPosBadge'].forEach(id => {
         const b = document.getElementById(id);
         if (!b) return;
@@ -55,4 +56,34 @@ export function resetBadges() {
         setBadgeColor(pieBadge, 'purple');
         pieBadge.style.transform = '';
     }
+}
+
+/* ---------- Indicador de compresión actual (estilo CPRmeter) ---------- */
+const GAUGE_MAX_MM = 70;   /* fondo de la escala vertical */
+
+export function updateCprGauge(prof, desc, descMax, barColor) {
+    const bar = document.getElementById('cprGaugeBar');
+    if (bar) {
+        const top = Math.min(Math.max(desc, 0), GAUGE_MAX_MM);
+        const end = Math.min(Math.max(prof, top), GAUGE_MAX_MM);
+        bar.style.setProperty('--top', (top / GAUGE_MAX_MM) * 100 + '%');
+        bar.style.setProperty('--h',   ((end - top) / GAUGE_MAX_MM) * 100 + '%');
+        bar.style.backgroundColor = barColor;
+    }
+
+    const status = document.getElementById('releaseStatus');
+    if (status) {
+        const ok = desc <= descMax;
+        status.dataset.state = ok ? 'ok' : 'bad';
+        status.textContent = ok
+            ? 'Liberación del pecho: completa'
+            : `Liberación del pecho: incompleta (quedó a ${desc} mm) — soltá todo el peso`;
+    }
+}
+
+export function resetCprGauge() {
+    const bar = document.getElementById('cprGaugeBar');
+    if (bar) { bar.style.setProperty('--h', '0%'); bar.style.backgroundColor = ''; }
+    const status = document.getElementById('releaseStatus');
+    if (status) { status.dataset.state = 'idle'; status.textContent = 'Liberación del pecho: —'; }
 }

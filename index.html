@@ -99,14 +99,28 @@
             <div class="chart-card card chart-card--prof">
                 <div class="chart-card-header">
                     <div class="chart-meta">
-                        <h3 class="chart-title">Profundidad de compresión</h3>
-                        <span class="chart-hint">Rango ideal: 50 – 60 mm</span>
+                        <h3 class="chart-title">Compresión y descompresión</h3>
+                        <span class="chart-hint">Rango ideal: 50 – 60 mm · El pecho tiene que volver arriba</span>
                     </div>
                     <div id="profBadge" class="data-badge"><span>--</span></div>
                 </div>
-                <div class="chart-wrap">
-                    <canvas id="profChart"></canvas>
+                <div class="prof-body">
+                    <!-- Indicador de la compresión actual, como en los equipos de feedback (CPRmeter, Q-CPR):
+                         la barra va desde donde quedó el pecho hasta donde llegó. -->
+                    <div class="cpr-gauge" aria-label="Compresión actual">
+                        <span class="cpr-gauge__label cpr-gauge__label--top">Soltar</span>
+                        <div class="cpr-gauge__track">
+                            <div class="cpr-gauge__zone cpr-gauge__zone--release"></div>
+                            <div class="cpr-gauge__zone cpr-gauge__zone--depth"></div>
+                            <div id="cprGaugeBar" class="cpr-gauge__bar"></div>
+                        </div>
+                        <span class="cpr-gauge__label cpr-gauge__label--depth">50–60</span>
+                    </div>
+                    <div class="chart-wrap prof-history">
+                        <canvas id="profChart"></canvas>
+                    </div>
                 </div>
+                <p id="releaseStatus" class="release-status" data-state="idle">Liberación del pecho: —</p>
             </div>
 
             <div class="chart-card card chart-card--quality">

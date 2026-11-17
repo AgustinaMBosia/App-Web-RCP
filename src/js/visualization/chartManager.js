@@ -6,8 +6,15 @@ export const PROF_MIN    = 50;
 export const PROF_MAX    = 60;
 export const CHART_WINDOW = 7;
 
+/* Descompresión: profundidad residual (mm) que queda antes de la siguiente compresión.
+   Por debajo de este valor se considera completa. Valor provisorio, a definir con la profesora. */
+export const DESC_MAX = 5;
+
 /* Array de colores de barras — mutado por dataHandler.js en cada tick */
 export const profColors = [];
+
+/* Descompresión (mm) de cada barra visible, alineada con profData — mutado por dataHandler.js */
+export const profDesc = [];
 
 /* Datasets — referencias compartidas con dataHandler.js */
 export const freqData = {
@@ -19,6 +26,11 @@ export const profData = {
     labels:   [],
     datasets: [{ label: 'Profundidad (mm)', data: [], backgroundColor: profColors }]
 };
+
+export const profBarColor = (prof) =>
+      prof >= PROF_MIN && prof <= PROF_MAX ? 'rgba(22,163,74,.75)'
+    : prof < PROF_MIN                     ? 'rgba(217,119,6,.75)'
+                                          : 'rgba(220,38,38,.75)';
 
 export const pieData = {
     labels:   ['Ejecución Correcta', 'Incorrecta'],
@@ -79,7 +91,18 @@ document.addEventListener('DOMContentLoaded', () => {
         data: profData,
         options: {
             ...CHART_DEFAULTS,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const desc = profDesc[ctx.dataIndex];
+                            return [`Profundidad: ${ctx.raw} mm`,
+                                    `Descompresión: ${desc} mm (${desc <= DESC_MAX ? 'completa' : 'incompleta'})`];
+                        }
+                    }
+                }
+            },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 11 } } },
                 y: { min: 30, max: 70, reverse: true, grid: { color: 'rgba(0,0,0,.05)' }, ticks: { font: { size: 11 } } }
@@ -123,6 +146,7 @@ export function resetChartData() {
     freqData.labels = []; freqData.datasets[0].data = [];
     profData.labels = []; profData.datasets[0].data = [];
     profColors.length = 0;
+    profDesc.length = 0;
     pieData.datasets[0].data     = [0, 0];
     handPosData.datasets[0].data = [1, 0];
     updateCharts();

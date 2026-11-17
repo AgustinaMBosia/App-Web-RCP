@@ -554,6 +554,76 @@ body {
     height: 200px;
 }
 
+/* ============================================================
+   Indicador de compresión actual (estilo CPRmeter / Q-CPR)
+   Escala vertical 0–70 mm: arriba el objetivo de liberación (0–5 mm),
+   abajo el objetivo de profundidad (50–60 mm).
+   ============================================================ */
+.prof-body {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 14px;
+    align-items: stretch;
+}
+.prof-history { min-width: 0; }
+
+.cpr-gauge {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    padding: 0 0 0 0;
+}
+.cpr-gauge__track {
+    position: relative;
+    width: 34px;
+    height: 100%;
+    border-radius: 8px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.cpr-gauge__zone {
+    position: absolute;
+    left: 0; right: 0;
+    z-index: 2;                               /* por encima de la barra: se ve si llegó o no */
+    background: rgba(22,163,74,.14);
+    border-top: 2px solid rgba(22,163,74,.85);
+    border-bottom: 2px solid rgba(22,163,74,.85);
+}
+.cpr-gauge__zone--release { top: 0;        height: 7.14%; border-top: none; }   /* 0–5 mm   */
+.cpr-gauge__zone--depth   { top: 71.43%;   height: 14.29%; }                    /* 50–60 mm */
+
+.cpr-gauge__bar {
+    position: absolute;
+    left: 5px; right: 5px;
+    top: var(--top, 0%);
+    height: var(--h, 0%);
+    border-radius: 4px;
+    background: #94a3b8;
+    transition: top .25s ease, height .25s ease, background-color .25s ease;
+}
+.cpr-gauge__label {
+    position: absolute;
+    left: 0;
+    font-size: .6rem;
+    font-weight: 600;
+    color: var(--text-subtle);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+.cpr-gauge__label--top   { top: 0; }
+.cpr-gauge__label--depth { top: 66%; }
+
+/* Estado de la liberación (como "Adequate / Incomplete release" de los equipos reales) */
+.release-status {
+    margin-top: -6px;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.release-status[data-state="ok"]  { color: var(--green); }
+.release-status[data-state="bad"] { color: var(--amber); }
+
 .chart-wrap--centered {
     display: flex;
     align-items: center;

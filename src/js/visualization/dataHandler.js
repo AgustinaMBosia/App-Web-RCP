@@ -1,7 +1,7 @@
 import { AppState } from '../state/appState.js';
-import { freqData, profData, pieData, handPosData, profColors, handPosChart,
-         FREQ_MIN, FREQ_MAX, PROF_MIN, PROF_MAX, CHART_WINDOW, updateCharts } from './chartManager.js';
-import { updateBadge, updateHandPosBadge, updatePieBadge } from './badges.js';
+import { freqData, profData, pieData, handPosData, profColors, profDesc, profBarColor, handPosChart,
+         FREQ_MIN, FREQ_MAX, PROF_MIN, PROF_MAX, DESC_MAX, CHART_WINDOW, updateCharts } from './chartManager.js';
+import { updateBadge, updateHandPosBadge, updatePieBadge, updateCprGauge } from './badges.js';
 import { showWaitingCircle, hideWaitingCircle } from './overlay.js';
 import { recordedData } from './csvExport.js';
 import { openPopup, closePopup } from '../ui/popups.js';
@@ -13,6 +13,7 @@ const MIN_WAITING_MS = 1000;
 
 export const fullFreqData        = [];
 export const fullProfData        = [];
+export const fullDescData        = [];
 export const fullLabels          = [];
 export const handPositionHistory = [];
 
@@ -23,6 +24,7 @@ let startTracking       = false;
 let hasNonZeroFreq      = false;
 let pastFreq            = 0;
 let pastProf            = 0;
+let pastDesc            = 0;
 let contadorCeros       = 0;
 let zeroAlertShown      = false;
 let trackingStartedAt   = 0;
@@ -33,11 +35,11 @@ export function resetVisualizationState() {
     incorrectExecutions = 0;
     startTracking       = false;
     hasNonZeroFreq      = false;
-    pastFreq = pastProf = contadorCeros = 0;
+    pastFreq = pastProf = pastDesc = contadorCeros = 0;
     zeroAlertShown      = false;
     trackingStartedAt   = 0;
     handPositionHistory.length = 0;
-    fullFreqData.length = fullProfData.length = fullLabels.length = 0;
+    fullFreqData.length = fullProfData.length = fullDescData.length = fullLabels.length = 0;
 }
 
 function handleDataForVisualization(parsedData) {
@@ -49,6 +51,7 @@ function handleDataForVisualization(parsedData) {
 
     let freq       = parsedData.freq        || 0;
     let prof       = parsedData.profundidad  || 0;
+    let desc       = parsedData.descompresion || 0;   /* mm residuales; 0 = descompresión completa */
     const handPos  = parsedData.handPosition || 'N/A';
     const isHandOK = handPos === 'OK';
 
@@ -74,6 +77,7 @@ function handleDataForVisualization(parsedData) {
     } else if (hasNonZeroFreq) {
         freq = pastFreq;
         prof = pastProf;
+        desc = pastDesc;
         contadorCeros++;
         if (!zeroAlertShown && contadorCeros === 3) {
             openPopup('stopped', { title: 'Maniobra detenida', text: 'Retome la maniobra para continuar.', icon: 'warning', confirmButtonText: 'Aceptar' });
@@ -100,22 +104,22 @@ function handleDataForVisualization(parsedData) {
         freqData.labels.shift(); freqData.datasets[0].data.shift();
         profData.labels.shift(); profData.datasets[0].data.shift();
         profColors.shift();
+        profDesc.shift();
     }
 
     freqData.labels.push(globalCounter);
     profData.labels.push(globalCounter);
     freqData.datasets[0].data.push(freq);
     profData.datasets[0].data.push(prof);
-    profColors.push(
-        isProfCorrect     ? 'rgba(22,163,74,.75)'
-        : prof < PROF_MIN ? 'rgba(217,119,6,.75)'
-                          : 'rgba(220,38,38,.75)'
-    );
+    profDesc.push(desc);
+    profColors.push(profBarColor(prof));
+    updateCprGauge(prof, desc, DESC_MAX, profBarColor(prof));
 
     fullLabels.push(globalCounter);
     fullFreqData.push(freq);
     fullProfData.push(prof);
-    recordedData.push({ timestamp: new Date().toISOString(), frecuencia: freq, profundidad: prof, posicionMano: handPos });
+    fullDescData.push(desc);
+    recordedData.push({ timestamp: new Date().toISOString(), frecuencia: freq, profundidad: prof, descompresion: desc, posicionMano: handPos });
 
     if (isFreqCorrect && isProfCorrect && isHandOK) correctExecutions++;
     else incorrectExecutions++;
@@ -125,6 +129,7 @@ function handleDataForVisualization(parsedData) {
 
     pastFreq = freq;
     pastProf = prof;
+    pastDesc = desc;
 
     updateCharts();
 }
