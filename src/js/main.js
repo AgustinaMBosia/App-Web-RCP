@@ -11,6 +11,7 @@ import { updateVisualization } from './visualization/dataHandler.js';
 import { recordedData } from './visualization/csvExport.js';
 import { saveCharts } from './visualization/summaryModal.js';
 import { clearManeuverData } from './visualizacion.js';
+import { initChartZoom } from './ui/chartZoom.js';
 
 /* ---------- Ciclo de vida de la sesión ---------- */
 
@@ -150,6 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
     AppState._hooks.connectionLost      = () => onSerialClosed('lost');
     AppState._hooks.updateVisualization = updateVisualization;
     AppState._hooks.resetAllStates      = resetAllStates;
+
+    initChartZoom();
 
     resetAllStates();
     setConnection('disconnected');
